@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "LuckyWheel — Zero-Click Radial File Converter, Multi-File Combo Engine & Local AI Power Studio for Windows & macOS",
   "main": "electron/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Satyam-Malviya/LuckyWheel.git"
+  },
+  "homepage": "https://github.com/Satyam-Malviya/LuckyWheel#readme",
   "scripts": {
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",

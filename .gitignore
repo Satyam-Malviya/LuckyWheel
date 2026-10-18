@@ -7,3 +7,4 @@ main_debug.log
 Thumbs.db
 .env
 .env.*
+*.zip

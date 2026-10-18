@@ -44,8 +44,8 @@ No coding or terminal required:
 #### Quick Start (3 Commands)
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/luckywheel.git
-cd luckywheel
+git clone https://github.com/Satyam-Malviya/LuckyWheel.git
+cd LuckyWheel
 
 # 2. Install dependencies
 npm install
@@ -97,11 +97,8 @@ npm run pack
 Run these commands inside the project folder to push LuckyWheel to your GitHub repository:
 
 ```bash
-git init
-git add .
-git commit -m "Initial release: LuckyWheel Zero-Click Radial File Converter & Pro Studio"
+git remote add origin https://github.com/Satyam-Malviya/LuckyWheel.git
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/luckywheel.git
 git push -u origin main
 ```
 
