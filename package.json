@@ -1,0 +1,89 @@
+{
+  "name": "luckywheel",
+  "version": "1.0.0",
+  "description": "LuckyWheel — Zero-Click Radial File Converter, Multi-File Combo Engine & Local AI Power Studio for Windows & macOS",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
+    "build": "vite build",
+    "start": "electron .",
+    "pack": "vite build && electron-builder --dir",
+    "dist:win": "vite build && electron-builder --win portable",
+    "dist:mac": "vite build && electron-builder --mac dmg zip",
+    "dist": "vite build && electron-builder"
+  },
+  "keywords": [
+    "luckywheel",
+    "file-converter",
+    "radial-menu",
+    "tangerine-alternative",
+    "windows",
+    "macos",
+    "desktop-utility",
+    "ffmpeg",
+    "pdf-tools",
+    "offline-converter"
+  ],
+  "author": "LuckyWheel Open Source",
+  "license": "MIT",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "framer-motion": "^11.15.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.468.0",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.luckywheel.app",
+    "productName": "LuckyWheel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "asarUnpack": [
+      "electron/explorer-watcher.ps1",
+      "electron/mac-watcher.jxa",
+      "electron/image-worker.cjs",
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "artifactName": "${productName}-Portable.${ext}"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "${productName}-macOS-${arch}.${ext}"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+// Native macOS Finder & Desktop Selection + Shift/Option Watcher for LuckyWheel (JXA / Objective-C Bridge)
+ObjC.import('Cocoa');
+ObjC.import('Foundation');
+
+function emitJson(obj) {
+  const line = JSON.stringify(obj) + '\n';
+  const data = $(line).dataUsingEncoding($.NSUTF8StringEncoding);
+  $.NSFileHandle.fileHandleWithStandardOutput.writeData(data);
+}
+
+function getFinderSelection() {
+  try {
+    const finder = Application('Finder');
+    const sel = finder.selection();
+    if (!sel || !sel.length) return [];
+    const paths = [];
+    for (let i = 0; i < sel.length; i++) {
+      try {
+        const u = sel[i].url();
+        if (u) {
+          const nsUrl = $.NSURL.URLWithString($(u));
+          if (nsUrl && nsUrl.path) {
+            paths.push(ObjC.unwrap(nsUrl.path));
+          }
+        }
+      } catch (e) {}
+    }
+    return paths;
+  } catch (e) {
+    return [];
+  }
+}
+
+let wasShift = false;
+let wasAlt = false;
+let wasCtrl = false;
+
+emitJson({ type: 'ready', platform: 'darwin' });
+
+while (true) {
+  $.NSThread.sleepForTimeInterval(0.025);
+  const flags = Number($.NSEvent.modifierFlags);
+  // NSEventModifierFlagShift = 1 << 17 (131072)
+  // NSEventModifierFlagOption = 1 << 19 (524288)
+  // NSEventModifierFlagControl = 1 << 18 (262144)
+  const isShift = (flags & 131072) !== 0;
+  const isAlt = (flags & 524288) !== 0;
+  const isCtrl = (flags & 262144) !== 0;
+
+  const shiftDown = isShift && !wasShift && !isAlt && !isCtrl;
+  const altDown = isAlt && !wasAlt && !isShift && !isCtrl;
+  const ctrlDown = isCtrl && !wasCtrl && !isShift && !isAlt;
+
+  if (shiftDown || altDown || ctrlDown) {
+    const frontApp = $.NSWorkspace.sharedWorkspace.frontmostApplication;
+    const bundleId = frontApp ? ObjC.unwrap(frontApp.bundleIdentifier) : '';
+    if (bundleId === 'com.apple.finder') {
+      const files = getFinderSelection();
+      if (files.length > 0) {
+        const mode = shiftDown ? 'conversions' : altDown ? 'tools' : 'actions';
+        const key = shiftDown ? 'Shift' : altDown ? 'Alt' : 'Ctrl';
+        emitJson({
+          type: 'keydown',
+          key: key,
+          mode: mode,
+          files: files,
+          isDragging: false,
+        });
+      }
+    }
+  }
+
+  if (!isShift && wasShift) emitJson({ type: 'keyup', key: 'Shift' });
+  if (!isAlt && wasAlt) emitJson({ type: 'keyup', key: 'Alt' });
+  if (!isCtrl && wasCtrl) emitJson({ type: 'keyup', key: 'Ctrl' });
+
+  wasShift = isShift;
+  wasAlt = isAlt;
+  wasCtrl = isCtrl;
+}
