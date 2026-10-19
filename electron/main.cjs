@@ -559,11 +559,15 @@ ipcMain.handle('dialog:pickFiles', async (_e, options = {}) => {
 
 ipcMain.handle('files:process', async (_e, payload) => {
   try {
+    logDebug(`files:process start: action=${payload?.actionId}, mode=${payload?.mode}, filesCount=${payload?.files?.length}`);
     const res = await processFiles(payload, (progress, statusText) => {
       mainWindow?.webContents.send('files:progress', { progress, statusText });
+      overlayWindow?.webContents.send('files:progress', { progress, statusText });
     });
+    logDebug(`files:process success: ${res?.message}`);
     return res;
   } catch (err) {
+    logDebug('files:process ERROR: ' + (err && err.stack ? err.stack : err));
     return {
       success: false,
       outputs: [],

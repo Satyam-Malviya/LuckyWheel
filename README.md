@@ -3,14 +3,15 @@
 <div align="center">
 
 [![Release](https://img.shields.io/github/v/release/Satyam-Malviya/LuckyWheel?style=for-the-badge&color=ff5200)](https://github.com/Satyam-Malviya/LuckyWheel/releases/tag/v1.0.0)
-[![Direct Download](https://img.shields.io/badge/Download_Portable_.exe-Single--Click_Run-brightgreen?style=for-the-badge&logo=windows)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)
+[![Setup Installer](https://img.shields.io/badge/Download_Setup_.exe-Standard_Windows_Installer-blue?style=for-the-badge&logo=windows)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Setup-1.0.0.exe)
+[![Portable Exe](https://img.shields.io/badge/Download_Portable_.exe-Single--Click_Run-brightgreen?style=for-the-badge&logo=windows)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)
 [![Platform](https://img.shields.io/badge/Platform-Windows_%7C_macOS-blue?style=for-the-badge)](https://github.com/Satyam-Malviya/LuckyWheel)
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
 
 <br/>
 
 **The zero-click, 100% offline radial file converter and local power-utility studio for Windows & macOS.**  
-*Inspired by Tangerine — completely offline, zero cloud uploads, zero wait times.*
+*Inspired by Tangerine — completely offline, bundled FFmpeg & Sharp engines, zero cloud uploads, zero wait times.*
 
 <br/>
 
@@ -24,25 +25,35 @@
 ## ⚡ 1-Click Fast Start (No Setup / No Node.js Required!)
 
 > [!IMPORTANT]
-> **You do NOT need to install Node.js, Git, or run any terminal commands.**  
-> Anyone can download the single `.exe` file and start using LuckyWheel immediately!
+> **Everything is 100% bundled inside the `.exe`!**  
+> You do **NOT** need to install Node.js, Git, or FFmpeg, or run any terminal commands.  
+> Just download the installer or portable `.exe` and start converting immediately.
 
-### 📥 Step-by-Step Quick Guide:
+### 📥 Download Options:
 
-1. **Download the App:**
-   - ⬇️ **[Click here to download `LuckyWheel-Portable.exe` (v1.0.0)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)** *(Direct 1-Click Download, ~81 MB)*
-   - *(Optional: If you prefer an unpacked zip folder, download **[LuckyWheel-Windows-v1.0.0.zip](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Windows-v1.0.0.zip)**).*
+| File | Type | Description | Download Link |
+| :--- | :--- | :--- | :--- |
+| **`LuckyWheel-Setup-1.0.0.exe`** | 🛠️ **Real Software Setup Installer** | Standard Windows installer: creates Desktop & Start Menu shortcuts, proper Uninstaller, runs automatically. | ⬇️ **[Download Setup Installer](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Setup-1.0.0.exe)** |
+| **`LuckyWheel-Portable.exe`** | 🚀 **Single-Click Portable Exe** | Zero-installation standalone `.exe`. Just double-click to run anywhere directly from USB or Downloads. | ⬇️ **[Download Portable .exe](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)** |
+| **`LuckyWheel-Windows-v1.0.0.zip`** | 📦 **Standalone Zip Archive** | Unpack into any folder and run `LuckyWheel.exe`. | ⬇️ **[Download Zip](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Windows-v1.0.0.zip)** |
 
-2. **Run with 1 Click:**
-   - Double-click **`LuckyWheel-Portable.exe`**.
-   - LuckyWheel starts instantly and runs silently in your background System Tray (bottom-right near your clock).
+---
 
-3. **Convert Anywhere in File Explorer:**
-   - Open any folder in **Windows File Explorer** or on your **Desktop**.
+### 🚀 How to Use in 3 Simple Steps:
+
+1. **Install or Run:**
+   - Double-click **`LuckyWheel-Setup-1.0.0.exe`** to install as a real desktop application, or double-click **`LuckyWheel-Portable.exe`**.
+   - LuckyWheel starts instantly and stays ready in your background System Tray (near your clock).
+
+2. **Select Any File in Explorer or Desktop:**
+   - Open **Windows File Explorer** or your **Desktop**.
    - Click/Select any file (e.g., photo, video, PDF, audio).
-   - Press **`Shift`** on your keyboard — the **Radial Wheel blooms right at your mouse cursor** in `<5ms`!
-   - Hover over any petal to see a **Live Video Preview Card** with an English explanation.
-   - Click to convert — your new file is saved **instantly in the exact same folder**!
+
+3. **Bloom the Wheel with 1 Key:**
+   - Press **`Shift`** — the **Radial Wheel blooms right at your mouse cursor** in `<5ms`!
+   - Press **`Alt`** — opens the **30+ Pro Local Tools** (Passport photo, Exam KB compressor, Video trim, Speed, Vocal splitter).
+   - Press **`Ctrl`** — opens **Quick Actions** (Wi-Fi QR transfer to phone, Copy path, Terminal).
+   - Click your desired format/tool — your converted file is saved **instantly in the exact same folder**!
 
 <div align="center">
   <br/>
@@ -80,7 +91,7 @@ Need a file from your PC on your smartphone?
 2. Scan the on-screen QR code with your iPhone or Android camera.
 3. The file downloads directly over your local Wi-Fi network at blazing gigabit speeds without cables or cloud uploads!
 
-### 3. 🎨 275+ Supported Formats
+### 3. 🎨 275+ Supported Formats (100% Offline)
 - **Images:** `PNG`, `JPG`, `WebP`, `AVIF`, `HEIC`, `TIFF`, `BMP`, `ICO`, `SVG`
 - **Videos:** `MP4`, `MOV`, `MKV`, `WebM`, `AVI`, `GIF`
 - **Audio:** `MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `Opus`
@@ -115,7 +126,7 @@ npm start
 
 ### 📦 Build Your Own Executables:
 ```bash
-# Build standalone Windows Portable .exe (outputs release/LuckyWheel-Portable.exe)
+# Build both Windows Setup Installer and Portable .exe (outputs to release/)
 npm run dist:win
 
 # Build macOS .dmg / .zip

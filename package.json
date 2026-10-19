@@ -15,7 +15,7 @@
     "build": "vite build",
     "start": "electron .",
     "pack": "vite build && electron-builder --dir",
-    "dist:win": "vite build && electron-builder --win portable",
+    "dist:win": "vite build && electron-builder --win",
     "dist:mac": "vite build && electron-builder --mac dmg zip",
     "dist": "vite build && electron-builder"
   },
@@ -67,19 +67,38 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!electron/bin/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/bin",
+        "to": "bin",
+        "filter": ["**/*"]
+      }
     ],
     "asarUnpack": [
       "electron/explorer-watcher.ps1",
       "electron/mac-watcher.jxa",
-      "electron/image-worker.cjs",
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*"
     ],
     "win": {
       "target": [
+        "nsis",
         "portable"
-      ],
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LuckyWheel",
+      "runAfterFinish": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
       "artifactName": "${productName}-Portable.${ext}"
     },
     "mac": {

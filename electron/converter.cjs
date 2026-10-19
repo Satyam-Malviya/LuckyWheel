@@ -2,25 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
-const { execFile, exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
-const execAsync = promisify(exec);
 
-const WORKER_SCRIPT = fs.existsSync(
-  path.join(__dirname, 'image-worker.cjs').replace('app.asar', 'app.asar.unpacked')
-)
-  ? path.join(__dirname, 'image-worker.cjs').replace('app.asar', 'app.asar.unpacked')
-  : path.join(__dirname, 'image-worker.cjs');
-
-async function runImageWorker(workerPayload) {
-  const { stdout } = await execFileAsync('node', [WORKER_SCRIPT, JSON.stringify(workerPayload)], {
-    windowsHide: true,
-    maxBuffer: 10 * 1024 * 1024,
-  });
-  const lines = (stdout || '').trim().split(/\r?\n/);
-  const lastLine = lines[lines.length - 1] || '{}';
-  return JSON.parse(lastLine);
+// Load image & document processing libraries directly in-process
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.error('[LuckyWheel] sharp native module not loaded:', e.message);
 }
 
 let PDFDocument, degrees;
@@ -29,21 +20,105 @@ try {
   PDFDocument = pdfLib.PDFDocument;
   degrees = pdfLib.degrees;
 } catch (e) {
-  console.warn('pdf-lib not loaded yet:', e.message);
+  console.warn('[LuckyWheel] pdf-lib not loaded:', e.message);
 }
 
 let JSZip;
 try {
   JSZip = require('jszip');
 } catch (e) {
-  console.warn('JSZip not loaded yet:', e.message);
+  console.warn('[LuckyWheel] JSZip not loaded:', e.message);
 }
 
 let QRCode;
 try {
   QRCode = require('qrcode');
 } catch (e) {
-  console.warn('QRCode not loaded yet:', e.message);
+  console.warn('[LuckyWheel] QRCode not loaded:', e.message);
+}
+
+/**
+ * Locate the bundled or system FFmpeg binary across Windows / macOS environments
+ */
+function getFfmpegPath() {
+  const candidates = [
+    // 1. Packaged Electron app extraResources (installer / portable win-unpacked)
+    process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'ffmpeg.exe') : null,
+    process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'ffmpeg') : null,
+    // 2. Local bin directory inside electron/
+    path.join(__dirname, 'bin', 'ffmpeg.exe'),
+    path.join(__dirname, 'bin', 'ffmpeg'),
+    path.join(__dirname, '..', 'electron', 'bin', 'ffmpeg.exe'),
+    path.join(__dirname, '..', 'bin', 'ffmpeg.exe'),
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // 3. Known WinGet Gyan FFmpeg path on Windows fallback
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    const wingetSearch = path.join(
+      process.env.LOCALAPPDATA,
+      'Microsoft',
+      'WinGet',
+      'Packages'
+    );
+    if (fs.existsSync(wingetSearch)) {
+      try {
+        const pkgs = fs.readdirSync(wingetSearch);
+        for (const pkg of pkgs) {
+          if (pkg.toLowerCase().includes('ffmpeg')) {
+            const candidateBin = path.join(wingetSearch, pkg, 'ffmpeg-8.1-full_build', 'bin', 'ffmpeg.exe');
+            if (fs.existsSync(candidateBin)) return candidateBin;
+            const candidateBin2 = path.join(wingetSearch, pkg, 'bin', 'ffmpeg.exe');
+            if (fs.existsSync(candidateBin2)) return candidateBin2;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // 4. Default to system PATH
+  return 'ffmpeg';
+}
+
+/**
+ * Check if FFmpeg is available on the system or bundled
+ */
+async function checkFfmpeg() {
+  const ffBin = getFfmpegPath();
+  try {
+    const { stdout } = await execFileAsync(ffBin, ['-version'], {
+      windowsHide: true,
+      timeout: 5000,
+    });
+    return { available: true, version: stdout.split('\n')[0], path: ffBin };
+  } catch {
+    return { available: false, version: null, path: null };
+  }
+}
+
+/**
+ * Safe FFmpeg runner with clean error messaging
+ */
+async function runFfmpeg(args) {
+  const ffBin = getFfmpegPath();
+  try {
+    return await execFileAsync(ffBin, args, {
+      windowsHide: true,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw new Error(
+        'FFmpeg executable was not found. Please ensure FFmpeg is installed or included in the app bundle.'
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -66,15 +141,168 @@ function getUniqueOutputPath(inputPath, suffix, newExt) {
 }
 
 /**
- * Check if FFmpeg is available on the system
+ * Execute Sharp & PDF-Lib tasks directly in-process with 0 external process spawn overhead
  */
-async function checkFfmpeg() {
-  try {
-    const { stdout } = await execAsync('ffmpeg -version');
-    return { available: true, version: stdout.split('\n')[0] };
-  } catch {
-    return { available: false, version: null };
+async function executeImageTask(payload) {
+  if (!sharp) {
+    throw new Error('Image processing engine (Sharp) is not available');
   }
+
+  const { task, filePath, files, outPath, actionId, options = {} } = payload;
+
+  if (task === 'createPDF' || actionId === 'createPDF' || (actionId === 'pdf' && Array.isArray(files))) {
+    if (!PDFDocument) throw new Error('PDFDocument engine (pdf-lib) is not available');
+    const pdfDoc = await PDFDocument.create();
+    const fileList = files && files.length ? files : [filePath];
+    for (const f of fileList) {
+      const pngBuffer = await sharp(f).png().toBuffer();
+      const metadata = await sharp(pngBuffer).metadata();
+      const img = await pdfDoc.embedPng(pngBuffer);
+      const w = metadata.width || 800;
+      const h = metadata.height || 1000;
+      const page = pdfDoc.addPage([w, h]);
+      page.drawImage(img, { x: 0, y: 0, width: w, height: h });
+    }
+    fs.writeFileSync(outPath, await pdfDoc.save());
+    return { ok: true, outPath };
+  }
+
+  if (task === 'createCollage' || actionId === 'createCollage') {
+    const fileList = files && files.length ? files : [filePath];
+    const cols = Math.ceil(Math.sqrt(fileList.length));
+    const rows = Math.ceil(fileList.length / cols);
+    const cellSize = 600;
+    const gap = 24;
+    const width = cols * cellSize + (cols + 1) * gap;
+    const height = rows * cellSize + (rows + 1) * gap;
+    const composites = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      const buf = await sharp(fileList[i]).resize(cellSize, cellSize, { fit: 'cover' }).png().toBuffer();
+      composites.push({
+        input: buf,
+        left: gap + c * (cellSize + gap),
+        top: gap + r * (cellSize + gap),
+      });
+    }
+    await sharp({
+      create: { width, height, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } },
+    })
+      .composite(composites)
+      .png()
+      .toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (['jpg', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp', 'ico'].includes(actionId)) {
+    let pipeline = sharp(filePath);
+    if (actionId === 'jpg' || actionId === 'jpeg') {
+      pipeline = pipeline.jpeg({ quality: options.quality || 90 });
+    } else if (actionId === 'png') {
+      pipeline = pipeline.png({ compressionLevel: 8 });
+    } else if (actionId === 'webp') {
+      pipeline = pipeline.webp({ quality: options.quality || 88 });
+    } else if (actionId === 'avif') {
+      pipeline = pipeline.avif({ quality: options.quality || 80 });
+    } else if (actionId === 'tiff') {
+      pipeline = pipeline.tiff();
+    } else if (actionId === 'ico') {
+      pipeline = pipeline.resize(256, 256, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png();
+    } else {
+      pipeline = pipeline.png();
+    }
+    await pipeline.toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'exactKb' || actionId === 'compress') {
+    const targetBytes = (options.targetKb || 45) * 1024;
+    let low = 10;
+    let high = 95;
+    let bestBuffer = null;
+    const meta = await sharp(filePath).metadata();
+    const width = meta.width || 1200;
+
+    for (let attempt = 0; attempt < 7; attempt++) {
+      const mid = Math.floor((low + high) / 2);
+      const buf = await sharp(filePath)
+        .resize({ width: Math.min(width, 1600), withoutEnlargement: true })
+        .jpeg({ quality: mid, mozjpeg: true })
+        .toBuffer();
+      if (buf.length <= targetBytes) {
+        bestBuffer = buf;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (!bestBuffer) {
+      bestBuffer = await sharp(filePath)
+        .resize({ width: 600, withoutEnlargement: true })
+        .jpeg({ quality: 25 })
+        .toBuffer();
+    }
+    fs.writeFileSync(outPath, bestBuffer);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'passportPhoto') {
+    await sharp(filePath)
+      .resize(413, 531, { fit: 'cover', position: 'attention' })
+      .flatten({ background: options.bgColor || '#ffffff' })
+      .jpeg({ quality: 92 })
+      .toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'removeMetadata') {
+    await sharp(filePath).toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'cropImage') {
+    const meta = await sharp(filePath).metadata();
+    const size = Math.min(meta.width || 800, meta.height || 800);
+    await sharp(filePath).resize(size, size, { fit: 'cover' }).toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'frameImage') {
+    const inner = await sharp(filePath).resize(1000, 1000, { fit: 'inside' }).png().toBuffer();
+    const innerMeta = await sharp(inner).metadata();
+    const pad = 72;
+    await sharp({
+      create: {
+        width: (innerMeta.width || 800) + pad * 2,
+        height: (innerMeta.height || 800) + pad * 2,
+        channels: 4,
+        background: { r: 255, g: 82, b: 0, alpha: 1 },
+      },
+    })
+      .composite([{ input: inner, left: pad, top: pad }])
+      .png()
+      .toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'editImage') {
+    await sharp(filePath).modulate({ brightness: 1.06, saturation: 1.18 }).sharpen().toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'redactImage') {
+    await sharp(filePath).blur(18).toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  if (actionId === 'docScanner') {
+    await sharp(filePath).grayscale().normalize().linear(1.4, -30).sharpen().jpeg({ quality: 92 }).toFile(outPath);
+    return { ok: true, outPath };
+  }
+
+  await sharp(filePath).toFile(outPath);
+  return { ok: true, outPath };
 }
 
 /**
@@ -100,10 +328,13 @@ async function processFiles(payload, onProgress = () => {}) {
   // =========================================================================
   // 1. MULTI-FILE & COMBO OPERATIONS
   // =========================================================================
-  if (actionId === 'createPDF' || (actionId === 'pdf' && ['jpg', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp'].includes(firstExt) && files.length >= 1)) {
+  if (
+    actionId === 'createPDF' ||
+    (actionId === 'pdf' && ['jpg', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp'].includes(firstExt) && files.length >= 1)
+  ) {
     onProgress(35, 'Building PDF from images...');
     const outPath = getUniqueOutputPath(firstFile, files.length > 1 ? 'Combined' : 'Converted', 'pdf');
-    await runImageWorker({ task: 'createPDF', files, outPath, actionId, options });
+    await executeImageTask({ task: 'createPDF', files, outPath, actionId, options });
     results.push(outPath);
     onProgress(100, 'PDF created!');
     return { success: true, outputs: results, message: `Saved ${path.basename(outPath)}` };
@@ -145,7 +376,7 @@ async function processFiles(payload, onProgress = () => {}) {
   if (actionId === 'createCollage') {
     onProgress(35, 'Building high-res photo collage...');
     const outPath = getUniqueOutputPath(firstFile, 'Collage', 'png');
-    await runImageWorker({ task: 'createCollage', files, outPath, actionId, options });
+    await executeImageTask({ task: 'createCollage', files, outPath, actionId, options });
     results.push(outPath);
     onProgress(100, 'Collage saved!');
     return { success: true, outputs: results, message: `Saved ${path.basename(outPath)}` };
@@ -157,7 +388,7 @@ async function processFiles(payload, onProgress = () => {}) {
     const audioFile = files.find((f) => /\.(mp3|wav|m4a|flac|ogg|opus)$/i.test(f)) || files[1];
     const outPath = getUniqueOutputPath(videoFile, 'WithAudio', 'mp4');
     onProgress(40, 'Merging video and audio tracks via FFmpeg...');
-    await execFileAsync('ffmpeg', [
+    await runFfmpeg([
       '-y',
       '-i', videoFile,
       '-i', audioFile,
@@ -179,7 +410,7 @@ async function processFiles(payload, onProgress = () => {}) {
     const audioFile = files.find((f) => /\.(mp3|wav|m4a|flac|ogg)$/i.test(f)) || files[1];
     const outPath = getUniqueOutputPath(audioFile, 'Video', 'mp4');
     onProgress(40, 'Rendering audio + cover art into MP4 video...');
-    await execFileAsync('ffmpeg', [
+    await runFfmpeg([
       '-y',
       '-loop', '1',
       '-i', imageFile,
@@ -206,7 +437,7 @@ async function processFiles(payload, onProgress = () => {}) {
     fs.writeFileSync(listFile, listContent, 'utf8');
     onProgress(45, 'Joining video clips...');
     try {
-      await execFileAsync('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
+      await runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
     } finally {
       if (fs.existsSync(listFile)) fs.unlinkSync(listFile);
     }
@@ -319,11 +550,11 @@ async function processFiles(payload, onProgress = () => {}) {
     const pctBase = 20 + Math.round((idx / files.length) * 70);
     onProgress(pctBase, `Processing ${path.basename(filePath)}...`);
 
-    // --- A. IMAGE CONVERSIONS & TOOLS (via out-of-process Sharp worker) ---
+    // --- A. IMAGE CONVERSIONS & TOOLS (in-process via Sharp) ---
     if (isImage) {
       if (['jpg', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'bmp', 'ico'].includes(actionId)) {
         const outPath = getUniqueOutputPath(filePath, '', actionId === 'ico' ? 'png' : actionId);
-        await runImageWorker({ task: 'convert', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'convert', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
@@ -334,56 +565,56 @@ async function processFiles(payload, onProgress = () => {}) {
           actionId === 'exactKb' ? `${options.targetKb || 45}KB` : 'Compressed',
           'jpg'
         );
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'passportPhoto') {
         const outPath = getUniqueOutputPath(filePath, 'Passport_35x45mm', 'jpg');
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'removeMetadata') {
         const outPath = getUniqueOutputPath(filePath, 'NoMetadata', ext === 'svg' ? 'png' : ext);
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'cropImage') {
         const outPath = getUniqueOutputPath(filePath, 'Cropped', ext === 'svg' ? 'png' : ext);
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'frameImage') {
         const outPath = getUniqueOutputPath(filePath, 'Framed', 'png');
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'editImage') {
         const outPath = getUniqueOutputPath(filePath, 'Enhanced', ext === 'svg' ? 'png' : ext);
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'redactImage') {
         const outPath = getUniqueOutputPath(filePath, 'Redacted', ext === 'svg' ? 'png' : ext);
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'docScanner') {
         const outPath = getUniqueOutputPath(filePath, 'ScannedDoc', 'jpg');
-        await runImageWorker({ task: 'tool', filePath, outPath, actionId, options });
+        await executeImageTask({ task: 'tool', filePath, outPath, actionId, options });
         results.push(outPath);
         continue;
       }
@@ -401,14 +632,14 @@ async function processFiles(payload, onProgress = () => {}) {
         } else {
           args.push(outPath);
         }
-        await execFileAsync('ffmpeg', args);
+        await runFfmpeg(args);
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'muteVideo') {
         const outPath = getUniqueOutputPath(filePath, 'Muted', ext);
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-c:v', 'copy', '-an', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-c:v', 'copy', '-an', outPath]);
         results.push(outPath);
         continue;
       }
@@ -417,7 +648,7 @@ async function processFiles(payload, onProgress = () => {}) {
         const speed = Number(options.speed) || 2.0;
         const pts = (1 / speed).toFixed(3);
         const outPath = getUniqueOutputPath(filePath, `Speed_${speed}x`, ext);
-        await execFileAsync('ffmpeg', [
+        await runFfmpeg([
           '-y', '-i', filePath,
           '-filter:v', `setpts=${pts}*PTS`,
           '-filter:a', `atempo=${Math.min(2.0, Math.max(0.5, speed))}`,
@@ -438,7 +669,7 @@ async function processFiles(payload, onProgress = () => {}) {
           `Trimmed_${start}s-${start + duration}s`,
           ext
         );
-        await execFileAsync('ffmpeg', [
+        await runFfmpeg([
           '-y',
           '-ss',
           String(start),
@@ -456,28 +687,28 @@ async function processFiles(payload, onProgress = () => {}) {
 
       if (actionId === 'videoSnapshots') {
         const outPath = getUniqueOutputPath(filePath, 'Snapshot', 'png');
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-ss', '00:00:01', '-vframes', '1', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-ss', '00:00:01', '-vframes', '1', outPath]);
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'normalizeAudio') {
         const outPath = getUniqueOutputPath(filePath, 'Normalized', ext);
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', outPath]);
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'audioChannels') {
         const outPath = getUniqueOutputPath(filePath, 'Mono', ext);
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-ac', '1', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-ac', '1', outPath]);
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'audioToVideo') {
         const outPath = getUniqueOutputPath(filePath, 'Visualizer', 'mp4');
-        await execFileAsync('ffmpeg', [
+        await runFfmpeg([
           '-y', '-i', filePath,
           '-filter_complex', '[0:a]showwaves=s=1280x720:mode=line:colors=0xfb724b:rate=30,format=yuv420p[v]',
           '-map', '[v]', '-map', '0:a',
@@ -491,14 +722,14 @@ async function processFiles(payload, onProgress = () => {}) {
       if (actionId === 'vocalSplitter') {
         // Karaoke / Vocal Phase Cancellation Instrumental Extractor via FFmpeg stereotools
         const outPath = getUniqueOutputPath(filePath, 'Instrumental_Karaoke', 'mp3');
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-af', 'pan=stereo|c0=c0-c1|c1=c1-c0', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-af', 'pan=stereo|c0=c0-c1|c1=c1-c0', outPath]);
         results.push(outPath);
         continue;
       }
 
       if (actionId === 'compress' && isVideo) {
         const outPath = getUniqueOutputPath(filePath, 'Compressed', 'mp4');
-        await execFileAsync('ffmpeg', ['-y', '-i', filePath, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', outPath]);
+        await runFfmpeg(['-y', '-i', filePath, '-vcodec', 'libx264', '-crf', '28', '-preset', 'fast', outPath]);
         results.push(outPath);
         continue;
       }
@@ -671,5 +902,6 @@ async function generateWifiQrForFile(filePath, serverUrl) {
 module.exports = {
   processFiles,
   checkFfmpeg,
+  getFfmpegPath,
   generateWifiQrForFile,
 };

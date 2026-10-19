@@ -3,11 +3,12 @@ dist/
 release/
 *.log
 main_debug.log
+test_sharp*.txt
+worker_err.txt
 .DS_Store
 Thumbs.db
 .env
 .env.*
 *.zip
 README floatShelf*.md
-release/
-
+electron/bin/
