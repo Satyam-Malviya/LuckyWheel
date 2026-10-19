@@ -8,3 +8,6 @@ Thumbs.db
 .env
 .env.*
 *.zip
+README floatShelf*.md
+release/
+
