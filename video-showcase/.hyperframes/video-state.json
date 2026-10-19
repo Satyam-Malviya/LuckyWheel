@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "historyId": "c52ea338-3719-47e7-a50c-f2ce6ce463b6",
+  "currentRevision": null,
+  "pendingChanges": false,
+  "files": {
+    "AGENTS.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\1d\\1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "CLAUDE.md": {
+      "hash": "1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\1d\\1d4f0c8ca2507b94fd7c9df709fff01416adbd51a0f922b9d6ed2f40129147d5"
+    },
+    "hyperframes.json": {
+      "hash": "53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\53\\53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
+    },
+    "index.html": {
+      "hash": "2ae11741d56daf0d8958854f0042325ebbbcdfcc07ebb0729e5e5513021d3af1",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\2a\\2ae11741d56daf0d8958854f0042325ebbbcdfcc07ebb0729e5e5513021d3af1"
+    },
+    "meta.json": {
+      "hash": "920d75a82f2db32296d9f7aa63ada6c6ad7a2c1cad935df9b39cc32160e0ffd1",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\92\\920d75a82f2db32296d9f7aa63ada6c6ad7a2c1cad935df9b39cc32160e0ffd1"
+    },
+    "package.json": {
+      "hash": "03e901827c8104484af354d471fbd3d91f1150ea7ac5dedd1b309024739fc7d5",
+      "content": "C:\\Users\\lucif\\.cache\\hyperframes\\history\\c52ea338-3719-47e7-a50c-f2ce6ce463b6\\blobs\\03\\03e901827c8104484af354d471fbd3d91f1150ea7ac5dedd1b309024739fc7d5"
+    }
+  },
+  "revisions": {},
+  "checks": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "snapshots": {
+    "latest": null,
+    "revisions": {},
+    "unversioned": []
+  },
+  "renders": {
+    "latest": {
+      "id": "687b4aa4-3248-4aa5-b81b-b3c64a7ee70f",
+      "completedAt": 1792413502733,
+      "output": "E:\\Projects\\LuckyWheel\\public\\assets\\luckywheel-motion.mp4",
+      "status": "completed",
+      "revision": null
+    },
+    "retainedRevisions": []
+  },
+  "pendingArtifactCleanup": []
+}
