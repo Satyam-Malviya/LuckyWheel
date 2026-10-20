@@ -163,7 +163,39 @@ function Get-ExplorerFolderAndFiles([int64]$hwndInt, [string]$fgTitle, [IntPtr]$
             } catch {}
         }
     } catch {}
-    if ($tabs.Count -eq 0) { return @() }
+
+    # In Windows 11 multi-tab / XAML islands, win.HWND might be an inner ShellView. Fallback by LocationName / Title.
+    if ($tabs.Count -eq 0) {
+        try {
+            foreach ($win in $shell.Windows()) {
+                try {
+                    $loc = [string]$win.LocationName
+                    if ($loc -and $fgTitle -and ($fgTitle.StartsWith($loc) -or $fgTitle -match [regex]::Escape($loc))) {
+                        $tabs += $win
+                    }
+                } catch {}
+            }
+        } catch {}
+    }
+
+    $fallbackFolder = ""
+    if ($fgTitle) {
+        $cleanTitle = $fgTitle -replace " - File Explorer$", "" -replace " - Windows Explorer$", ""
+        if ($cleanTitle -eq "Downloads") { $fallbackFolder = [System.IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), 'Downloads') }
+        elseif ($cleanTitle -eq "Documents") { $fallbackFolder = [Environment]::GetFolderPath('MyDocuments') }
+        elseif ($cleanTitle -eq "Desktop") { $fallbackFolder = [Environment]::GetFolderPath('Desktop') }
+        elseif ($cleanTitle -eq "Pictures") { $fallbackFolder = [Environment]::GetFolderPath('MyPictures') }
+        elseif ($cleanTitle -eq "Videos") { $fallbackFolder = [Environment]::GetFolderPath('MyVideos') }
+        elseif ($cleanTitle -eq "Music") { $fallbackFolder = [Environment]::GetFolderPath('MyMusic') }
+        elseif ([System.IO.Directory]::Exists($cleanTitle)) { $fallbackFolder = $cleanTitle }
+    }
+
+    if ($tabs.Count -eq 0) {
+        return @{
+            folder = $fallbackFolder
+            files  = @()
+        }
+    }
 
     $active = $null
     if ($tabs.Count -eq 1) {
@@ -210,6 +242,15 @@ function Get-ExplorerFolderAndFiles([int64]$hwndInt, [string]$fgTitle, [IntPtr]$
         $folderPath = [string]$active.Document.Folder.Self.Path
     } catch {}
 
+    if ([string]::IsNullOrEmpty($folderPath)) {
+        try {
+            $url = [string]$active.LocationURL
+            if ($url -and $url.StartsWith("file:///")) {
+                $folderPath = [System.Uri]::new($url).LocalPath
+            }
+        } catch {}
+    }
+
     $res = @()
     try {
         foreach ($item in $active.Document.SelectedItems()) {
@@ -221,6 +262,10 @@ function Get-ExplorerFolderAndFiles([int64]$hwndInt, [string]$fgTitle, [IntPtr]$
         try {
             $folderPath = [System.IO.Path]::GetDirectoryName($res[0])
         } catch {}
+    }
+
+    if ([string]::IsNullOrEmpty($folderPath)) {
+        $folderPath = $fallbackFolder
     }
 
     return @{
@@ -300,12 +345,16 @@ while ($true) {
         # Never trigger in other apps, or while renaming / typing in the address/search box
         if ($isExplorerOrDesktop -and -not $isMainDashboardFocused -and ($focusedCtrl -notmatch "Edit")) {
             $folderData = Get-BestFolderAndFiles $fgHwnd $fgClass $fgTitle $focusedHwnd
-            $files = @($folderData.files)
-            $curDir = [string]$folderData.folder
+            $files = if ($folderData -and $folderData.files) { @($folderData.files) } else { @() }
+            $curDir = if ($folderData -and $folderData.folder) { [string]$folderData.folder } else { "" }
+
+            if ([string]::IsNullOrEmpty($curDir) -and ($fgClass -eq "Progman" -or $fgClass -eq "WorkerW")) {
+                $curDir = [Environment]::GetFolderPath('Desktop')
+            }
 
             # If user pressed in an empty directory or on Desktop with nothing selected,
-            # allow opening the actions wheel (for LINK DL, Screen Snip, etc.)
-            if ($files.Count -eq 0 -and $curDir -ne "" -and ($mode -eq "actions" -or $mode -eq "tools")) {
+            # allow opening the actions / tools wheel (for LINK DL, Screen Snip, etc.)
+            if ($files.Count -eq 0 -and $curDir -ne "") {
                 $files = @($curDir)
             }
 

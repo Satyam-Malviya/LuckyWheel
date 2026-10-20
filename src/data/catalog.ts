@@ -456,6 +456,14 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
 // Quick File Actions (Control Wheel)
 export const FILE_ACTIONS_LIST: WheelPetalItem[] = [
   {
+    id: 'screenCapture',
+    label: 'SCREEN SNIP',
+    fullName: 'Screen Capture & Snip Studio',
+    description: 'Instant screenshot capture with Alt+S. Export to PNG, JPG, WEBP, or PDF and save to multiple destination folders.',
+    icon: 'Camera',
+    badge: 'ALT+S',
+  },
+  {
     id: 'downloadLink',
     label: 'LINK DL',
     fullName: 'Download Media or Page from Link',
@@ -554,7 +562,7 @@ export function getWheelPetals(
         TOOLS_CATALOG.findDuplicates,
       ];
     }
-    return [TOOLS_CATALOG.organizeFolder, TOOLS_CATALOG.findDuplicates, ...FILE_ACTIONS_LIST.slice(0, 3)];
+    return [TOOLS_CATALOG.screenCapture, TOOLS_CATALOG.downloadLink, TOOLS_CATALOG.organizeFolder, TOOLS_CATALOG.findDuplicates, ...FILE_ACTIONS_LIST.slice(2, 5)];
   }
 
   // Mixed File Selection (e.g., Video + Audio or Audio + Image)
@@ -585,7 +593,7 @@ export function getWheelPetals(
   }
 
   // Mode: TOOLS (Alt / Command)
-  const toolIds: string[] = [];
+  const toolIds: string[] = ['screenCapture', 'downloadLink'];
   if (isImg(primary)) {
     if (count > 1) {
       toolIds.push('createPDF', 'createCollage', 'exactKb', 'bulkRename', 'compress', 'removeMetadata', 'packZip');

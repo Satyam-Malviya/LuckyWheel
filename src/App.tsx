@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  Keyboard,
   Volume2,
   VolumeX,
   Pin,
@@ -61,6 +62,39 @@ export function App() {
 
   // Main Software Screen Snip State
   const [isMainSnipBusy, setIsMainSnipBusy] = useState(false);
+  // Custom Global Screenshot Shortcut State
+  const [customShortcut, setCustomShortcut] = useState('Alt+S');
+  const [isSavingShortcut, setIsSavingShortcut] = useState(false);
+  const [shortcutSaveMsg, setShortcutSaveMsg] = useState('');
+
+  useEffect(() => {
+    const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+    api?.getScreenshotShortcut?.().then((res: any) => {
+      if (res?.screenshotShortcut) setCustomShortcut(res.screenshotShortcut);
+    }).catch(() => {});
+  }, []);
+
+  const handleUpdateShortcut = async (newKey: string) => {
+    setIsSavingShortcut(true);
+    setShortcutSaveMsg('');
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const res = await api?.setScreenshotShortcut?.(newKey);
+      if (res && res.success) {
+        setCustomShortcut(newKey);
+        setShortcutSaveMsg('Saved!');
+        soundEngine.playDropConfirm();
+      } else {
+        setShortcutSaveMsg(res?.message || 'Failed');
+      }
+    } catch (e: any) {
+      setShortcutSaveMsg(e?.message || 'Error');
+    } finally {
+      setIsSavingShortcut(false);
+      setTimeout(() => setShortcutSaveMsg(''), 3000);
+    }
+  };
+
   const [mainSnipResult, setMainSnipResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const handleMainAppDownload = async () => {
@@ -262,7 +296,7 @@ export function App() {
               >
                 <Camera className="w-3.5 h-3.5 text-[#06b6d4]" />
                 <span className="hidden sm:inline">Snip</span>
-                <kbd className="text-[9.5px] bg-black/5 px-1 py-0.2 rounded font-mono text-[#5d655f]">Alt+S</kbd>
+                <kbd className="text-[9.5px] bg-black/5 px-1 py-0.2 rounded font-mono text-[#5d655f]">{customShortcut}</kbd>
               </button>
 
               <button
@@ -462,7 +496,7 @@ export function App() {
                     <span>Screen Capture Studio</span>
                   </span>
                   <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600 border border-cyan-200">
-                    SHORTCUT: ALT + S
+                    SHORTCUT: {customShortcut}
                   </span>
                 </div>
                 <h3 className="text-xl font-medium text-[#282b29]">
@@ -515,6 +549,41 @@ export function App() {
                     {mainSnipResult.message}
                   </div>
                 )}
+
+                {/* Custom Shortcut Assignment UI */}
+                <div className="bg-[#f7f8f7] p-3 rounded-2xl border border-black/5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[#282b29] flex items-center gap-1.5">
+                      <Keyboard className="w-3.5 h-3.5 text-[#ff5200]" />
+                      <span>Custom Shortcut Hotkey:</span>
+                    </span>
+                    {shortcutSaveMsg && (
+                      <span className="text-[11px] font-bold text-emerald-600 animate-fade-in">{shortcutSaveMsg}</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {['Alt+S', 'Ctrl+Alt+S', 'Alt+Shift+S', 'Alt+Q', 'F9', 'F10'].map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={isSavingShortcut}
+                        onClick={() => handleUpdateShortcut(key)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                          customShortcut === key
+                            ? 'bg-[#ff5200] text-white shadow-sm ring-2 ring-[#ff5200]/30'
+                            : 'bg-white border border-[#dfe2df] text-[#282b29] hover:border-[#ff5200]'
+                        }`}
+                      >
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-[#767d78]">
+                    Click any key combo above to assign custom shortcut across Windows.
+                  </p>
+                </div>
+
 
                 <div className="flex items-center justify-between text-xs text-[#767d78] px-1">
                   <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#f4f5f4] border border-[#dadfd6] font-bold text-[#282b29]">Alt + S</kbd> anytime</span>

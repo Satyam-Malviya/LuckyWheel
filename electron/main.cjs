@@ -547,23 +547,81 @@ app.whenReady().then(() => {
     console.warn('Global shortcut registration warning:', e.message);
   }
 
-  // Register Global Hotkeys: Alt+S, Ctrl+Alt+S, Alt+Shift+S for instant Screen Capture Studio
+  // Settings persistence for Custom Screenshot Shortcuts & Preferences
+  const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+  let userSettings = { screenshotShortcut: 'Alt+S' };
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) {
+      userSettings = { ...userSettings, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) };
+    }
+  } catch {}
+
+  const saveSettings = () => {
+    try {
+      fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(userSettings, null, 2), 'utf8');
+    } catch {}
+  };
+
+  const activeScreenshotShortcuts = new Set();
+
   const triggerScreenCaptureStudio = () => {
     logDebug('Global shortcut triggered Screen Capture Studio!');
     const cursor = screen.getCursorScreenPoint();
-    showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false, lastActiveExplorerDir);
+    const targetDir = lastActiveExplorerDir || app.getPath('desktop');
+    showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false, targetDir);
     setTimeout(() => {
       overlayWindow?.webContents.send('screenshot:trigger', { autoTrigger: true });
     }, 40);
   };
 
-  try {
-    globalShortcut.register('Alt+S', triggerScreenCaptureStudio);
-    globalShortcut.register('CommandOrControl+Alt+S', triggerScreenCaptureStudio);
-    globalShortcut.register('Alt+Shift+S', triggerScreenCaptureStudio);
-  } catch (e) {
-    logDebug('Screen capture global shortcut registration warning: ' + e.message);
-  }
+  const registerScreenshotHotkeys = (preferredShortcut) => {
+    for (const sc of activeScreenshotShortcuts) {
+      try { globalShortcut.unregister(sc); } catch {}
+    }
+    activeScreenshotShortcuts.clear();
+
+    const candidates = [
+      preferredShortcut || userSettings.screenshotShortcut || 'Alt+S',
+      'Alt+S',
+      'CommandOrControl+Alt+S',
+      'Alt+Shift+S',
+    ];
+
+    for (const sc of candidates) {
+      if (!sc) continue;
+      try {
+        if (!globalShortcut.isRegistered(sc)) {
+          const ok = globalShortcut.register(sc, triggerScreenCaptureStudio);
+          if (ok) activeScreenshotShortcuts.add(sc);
+        } else {
+          activeScreenshotShortcuts.add(sc);
+        }
+      } catch (e) {
+        logDebug(`Could not register ${sc}: ${e.message}`);
+      }
+    }
+  };
+
+  registerScreenshotHotkeys(userSettings.screenshotShortcut);
+
+  ipcMain.handle('settings:getShortcut', async () => {
+    return { screenshotShortcut: userSettings.screenshotShortcut || 'Alt+S' };
+  });
+
+  ipcMain.handle('settings:setShortcut', async (_e, newShortcut) => {
+    if (!newShortcut || typeof newShortcut !== 'string') {
+      return { success: false, message: 'Invalid shortcut string' };
+    }
+    try {
+      userSettings.screenshotShortcut = newShortcut.trim();
+      saveSettings();
+      registerScreenshotHotkeys(userSettings.screenshotShortcut);
+      return { success: true, shortcut: userSettings.screenshotShortcut };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  });
 });
 
 app.on('will-quit', () => {

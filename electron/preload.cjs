@@ -55,4 +55,6 @@ contextBridge.exposeInMainWorld('orbitAPI', {
     ipcRenderer.on('overlay:event', listener);
     return () => ipcRenderer.removeListener('overlay:event', listener);
   },
+  getScreenshotShortcut: () => ipcRenderer.invoke('settings:getShortcut'),
+  setScreenshotShortcut: (shortcut) => ipcRenderer.invoke('settings:setShortcut', shortcut),
 });

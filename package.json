@@ -79,9 +79,19 @@
     ],
     "win": {
       "target": [
-        "portable"
-      ],
-      "artifactName": "${productName}-Portable.${ext}"
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "LuckyWheel-Portable.exe"
+    },
+    "nsis": {
+      "artifactName": "LuckyWheel-Setup-1.0.0.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "uninstallDisplayName": "Uninstall LuckyWheel"
     },
     "mac": {
       "category": "public.app-category.utilities",
