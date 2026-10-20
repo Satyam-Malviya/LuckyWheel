@@ -15,7 +15,7 @@
     "build": "vite build",
     "start": "electron .",
     "pack": "vite build && electron-builder --dir",
-    "dist:win": "vite build && electron-builder --win portable",
+    "dist:win": "vite build && electron-builder --win portable nsis",
     "dist:mac": "vite build && electron-builder --mac dmg zip",
     "dist": "vite build && electron-builder"
   },

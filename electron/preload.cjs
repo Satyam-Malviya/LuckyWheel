@@ -57,4 +57,6 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   },
   getScreenshotShortcut: () => ipcRenderer.invoke('settings:getShortcut'),
   setScreenshotShortcut: (shortcut) => ipcRenderer.invoke('settings:setShortcut', shortcut),
+  openSnipStudio: () => ipcRenderer.send('snip:open'),
+  captureWebpageScroll: (payload) => ipcRenderer.invoke('screenshot:captureWebpage', payload),
 });

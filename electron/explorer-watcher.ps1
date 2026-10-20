@@ -352,12 +352,8 @@ while ($true) {
                 $curDir = [Environment]::GetFolderPath('Desktop')
             }
 
-            # If user pressed in an empty directory or on Desktop with nothing selected,
-            # allow opening the actions / tools wheel (for LINK DL, Screen Snip, etc.)
-            if ($files.Count -eq 0 -and $curDir -ne "") {
-                $files = @($curDir)
-            }
-
+            # STRICT: Only trigger file conversion wheel if user has actually selected file(s)!
+            # Never trigger on empty folders or blank background.
             if ($files.Count -gt 0) {
                 Emit-Json @{
                     type       = "keydown"

@@ -417,14 +417,6 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
     icon: 'CopyCheck',
     badge: 'FOLDER',
   },
-    screenCapture: {
-    id: 'screenCapture',
-    label: 'SNIP / SS',
-    fullName: 'Screen Capture & Snip Studio',
-    description: 'Instant area snip, active window, or full-screen capture. Save PNG/JPG/WEBP/PDF to multiple folders at once.',
-    icon: 'Camera',
-    badge: 'ALT+S',
-  },
   // Download from Link Tool
   downloadLink: {
     id: 'downloadLink',
@@ -455,14 +447,6 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
 
 // Quick File Actions (Control Wheel)
 export const FILE_ACTIONS_LIST: WheelPetalItem[] = [
-  {
-    id: 'screenCapture',
-    label: 'SCREEN SNIP',
-    fullName: 'Screen Capture & Snip Studio',
-    description: 'Instant screenshot capture with Alt+S. Export to PNG, JPG, WEBP, or PDF and save to multiple destination folders.',
-    icon: 'Camera',
-    badge: 'ALT+S',
-  },
   {
     id: 'downloadLink',
     label: 'LINK DL',
@@ -562,7 +546,7 @@ export function getWheelPetals(
         TOOLS_CATALOG.findDuplicates,
       ];
     }
-    return [TOOLS_CATALOG.screenCapture, TOOLS_CATALOG.downloadLink, TOOLS_CATALOG.organizeFolder, TOOLS_CATALOG.findDuplicates, ...FILE_ACTIONS_LIST.slice(2, 5)];
+    return [TOOLS_CATALOG.downloadLink, TOOLS_CATALOG.organizeFolder, TOOLS_CATALOG.findDuplicates, ...FILE_ACTIONS_LIST.slice(1, 4)];
   }
 
   // Mixed File Selection (e.g., Video + Audio or Audio + Image)
@@ -593,7 +577,7 @@ export function getWheelPetals(
   }
 
   // Mode: TOOLS (Alt / Command)
-  const toolIds: string[] = ['screenCapture', 'downloadLink'];
+  const toolIds: string[] = ['downloadLink'];
   if (isImg(primary)) {
     if (count > 1) {
       toolIds.push('createPDF', 'createCollage', 'exactKb', 'bulkRename', 'compress', 'removeMetadata', 'packZip');

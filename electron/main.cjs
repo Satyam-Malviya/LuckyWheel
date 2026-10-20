@@ -45,6 +45,51 @@ let overlayCursorTimer = null;
 let lastCursorDip = { x: -1, y: -1 };
 let tray = null;
 let isQuitting = false;
+
+let snipWindow = null;
+
+function showSnipStudioWindow() {
+  if (snipWindow && !snipWindow.isDestroyed()) {
+    snipWindow.show();
+    snipWindow.focus();
+    return;
+  }
+
+  const primaryDisp = screen.getPrimaryDisplay();
+  const workArea = primaryDisp.workArea;
+
+  snipWindow = new BrowserWindow({
+    width: 640,
+    height: 560,
+    x: Math.round(workArea.x + (workArea.width - 640) / 2),
+    y: Math.round(workArea.y + (workArea.height - 560) / 2),
+    frame: false,
+    transparent: true,
+    resizable: true,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  const resolvedDir = lastActiveExplorerDir || app.getPath('desktop');
+  const prodIndex = path.join(__dirname, '../dist/index.html');
+  const queryStr = `snip=1&dir=${encodeURIComponent(resolvedDir)}`;
+
+  if (fs.existsSync(prodIndex)) {
+    snipWindow.loadFile(prodIndex, { query: { snip: '1', dir: resolvedDir } });
+  } else {
+    snipWindow.loadURL(`http://localhost:5173/?${queryStr}`);
+  }
+
+  snipWindow.on('closed', () => {
+    snipWindow = null;
+  });
+}
+
 let watcherProcess = null;
 let lastActiveExplorerDir = '';
 let sharedFilesMap = new Map();
@@ -567,12 +612,7 @@ app.whenReady().then(() => {
 
   const triggerScreenCaptureStudio = () => {
     logDebug('Global shortcut triggered Screen Capture Studio!');
-    const cursor = screen.getCursorScreenPoint();
-    const targetDir = lastActiveExplorerDir || app.getPath('desktop');
-    showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false, targetDir);
-    setTimeout(() => {
-      overlayWindow?.webContents.send('screenshot:trigger', { autoTrigger: true });
-    }, 40);
+    showSnipStudioWindow();
   };
 
   const registerScreenshotHotkeys = (preferredShortcut) => {
@@ -869,31 +909,105 @@ ipcMain.handle('link:download', async (_e, payload) => {
 });
 
 // ==========================================
+
+async function captureScrollableWebpage({ url, outputDir = null, title = '' }) {
+  const resolvedDir = outputDir && fs.existsSync(outputDir)
+    ? (fs.statSync(outputDir).isDirectory() ? outputDir : path.dirname(outputDir))
+    : (lastActiveExplorerDir || app.getPath('desktop'));
+
+  const cleanTitle = (title || 'webpage_' + Date.now()).replace(/[\\/:*?"<>|]/g, '_').slice(0, 80);
+
+  const captureWin = new BrowserWindow({
+    show: false,
+    width: 1440,
+    height: 900,
+    webPreferences: {
+      offscreen: true,
+      images: true,
+    },
+  });
+
+  try {
+    await captureWin.loadURL(url, { timeout: 25000 });
+    await new Promise((r) => setTimeout(r, 1600));
+
+    const fullHeight = await captureWin.webContents.executeJavaScript(`
+      Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+        document.body.offsetHeight,
+        document.documentElement.offsetHeight,
+        900
+      )
+    `);
+
+    const targetHeight = Math.min(Math.max(fullHeight, 900), 20000);
+    captureWin.setSize(1440, targetHeight);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const tempDir = app.getPath('temp');
+    const outPngPath = path.join(tempDir, `LuckyWheel_scroll_${Date.now()}.png`);
+
+    const image = await captureWin.webContents.capturePage({
+      x: 0,
+      y: 0,
+      width: 1440,
+      height: targetHeight,
+    });
+
+    fs.writeFileSync(outPngPath, image.toPNG());
+
+    return {
+      success: true,
+      filePath: outPngPath,
+      width: 1440,
+      height: targetHeight,
+      previewDataUrl: image.resize({ width: 320 }).toDataURL(),
+      message: `Full page captured (${1440}×${targetHeight}px)`,
+    };
+  } catch (err) {
+    logDebug('captureScrollableWebpage error: ' + err.message);
+    return { success: false, message: err.message || 'Webpage scroll capture failed' };
+  } finally {
+    captureWin.destroy();
+  }
+}
+
 // Native Screen Capture & Snip Studio IPC
 // ==========================================
 ipcMain.handle('screenshot:capture', async (_e, payload) => {
   const { mode = 'screen', region = null, delayMs = 0 } = payload || {};
   try {
-    const wasVisible = overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
-    if (wasVisible) {
-      overlayWindow.hide();
-      await new Promise((r) => setTimeout(r, Math.max(80, delayMs)));
-    } else if (delayMs > 0) {
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
+    const isSnipVisible = snipWindow && !snipWindow.isDestroyed() && snipWindow.isVisible();
+    const isOverlayVisible = overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
+
+    if (isSnipVisible) snipWindow.hide();
+    if (isOverlayVisible) overlayWindow.hide();
+
+    await new Promise((r) => setTimeout(r, Math.max(90, delayMs)));
 
     const res = await captureScreen(mode, region);
 
-    if (wasVisible) {
-      const cursor = screen.getCursorScreenPoint();
-      showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false);
+    if (isSnipVisible && snipWindow && !snipWindow.isDestroyed()) {
+      snipWindow.show();
+      snipWindow.focus();
     }
 
     return res;
   } catch (err) {
     logDebug('screenshot:capture error: ' + err.message);
+    if (snipWindow && !snipWindow.isDestroyed()) snipWindow.show();
     return { success: false, message: err.message || 'Capture failed' };
   }
+});
+
+ipcMain.handle('screenshot:captureWebpage', async (_e, payload) => {
+  const { url, outputDir } = payload || {};
+  return await captureScrollableWebpage({ url, outputDir });
+});
+
+ipcMain.on('snip:open', () => {
+  showSnipStudioWindow();
 });
 
 ipcMain.handle('screenshot:save', async (_e, payload) => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Keyboard,
+  Crop,
   Volume2,
   VolumeX,
   Pin,
@@ -290,9 +291,12 @@ export function App() {
 
               <button
                 type="button"
-                onClick={() => handleMainAppCapture('screen')}
+                onClick={() => {
+                  const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                  api?.openSnipStudio?.();
+                }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#dfe2df] hover:border-[#ff5200] text-xs font-medium text-[#282b29] transition-colors shadow-sm"
-                title="Capture Screenshot (Alt+S)"
+                title="Open Screen Capture Studio (Alt+S)"
               >
                 <Camera className="w-3.5 h-3.5 text-[#06b6d4]" />
                 <span className="hidden sm:inline">Snip</span>
@@ -543,6 +547,18 @@ export function App() {
                     <span>3s Timer</span>
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                    api?.openSnipStudio?.();
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#06b6d4] hover:bg-[#0891b2] text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Crop className="w-4 h-4" />
+                  <span>Launch Screen Snip Studio (Area / Scroll / Full)</span>
+                </button>
 
                 {mainSnipResult && (
                   <div className={`p-2.5 rounded-xl text-xs font-medium ${mainSnipResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
