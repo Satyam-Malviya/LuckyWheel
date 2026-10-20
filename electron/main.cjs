@@ -31,6 +31,7 @@ const os = require('os');
 const http = require('http');
 const { exec, spawn } = require('child_process');
 const { processFiles, checkFfmpeg, generateWifiQrForFile } = require('./converter.cjs');
+const { detectUrl, downloadWithYtDlp, downloadDirectFile } = require('./downloader.cjs');
 
 // Ensure clean writable cache directory on Windows
 try {
@@ -638,4 +639,112 @@ ipcMain.handle('system:status', async () => {
 
 ipcMain.handle('explorer:selection', async () => {
   return await getWindowsExplorerSelectedFiles();
+});
+
+
+async function captureWebpageDirect({ url, format, outputDir, title }) {
+  if (!outputDir || !fs.existsSync(outputDir)) {
+    outputDir = app.getPath('downloads');
+  }
+  const cleanTitle = (title || 'webpage')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .slice(0, 80);
+
+  const captureWin = new BrowserWindow({
+    show: false,
+    width: 1440,
+    height: 900,
+    webPreferences: {
+      offscreen: true,
+      images: true,
+    },
+  });
+
+  try {
+    await captureWin.loadURL(url, { timeout: 15000 });
+    await new Promise((r) => setTimeout(r, 1200));
+
+    if (format === 'pdf') {
+      const pdfData = await captureWin.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+      });
+      const dest = path.join(outputDir, `${cleanTitle}.pdf`);
+      fs.writeFileSync(dest, pdfData);
+      return { success: true, filePath: dest, message: `Saved PDF: ${path.basename(dest)}` };
+    }
+
+    if (format === 'png') {
+      const image = await captureWin.webContents.capturePage();
+      const dest = path.join(outputDir, `${cleanTitle}.png`);
+      fs.writeFileSync(dest, image.toPNG());
+      return { success: true, filePath: dest, message: `Saved Screenshot: ${path.basename(dest)}` };
+    }
+
+    if (format === 'txt') {
+      const text = await captureWin.webContents.executeJavaScript('document.body.innerText');
+      const dest = path.join(outputDir, `${cleanTitle}.txt`);
+      fs.writeFileSync(dest, text, 'utf8');
+      return { success: true, filePath: dest, message: `Saved Text: ${path.basename(dest)}` };
+    }
+
+    throw new Error('Unsupported webpage format');
+  } finally {
+    captureWin.destroy();
+  }
+}
+
+ipcMain.handle('link:detect', async (_e, url) => {
+  try {
+    return await detectUrl(url);
+  } catch (err) {
+    return { success: false, message: err.message || 'Detection failed' };
+  }
+});
+
+ipcMain.handle('link:download', async (_e, payload) => {
+  const { url, type, format, outputDir, title, author } = payload || {};
+  let resolvedDir =
+    outputDir && fs.existsSync(outputDir)
+      ? fs.statSync(outputDir).isDirectory()
+        ? outputDir
+        : path.dirname(outputDir)
+      : app.getPath('downloads');
+
+  const onProgress = (percent, statusText) => {
+    overlayWindow?.webContents.send('link:progress', { percent, statusText });
+    mainWindow?.webContents.send('link:progress', { percent, statusText });
+  };
+
+  try {
+    logDebug(`link:download start: url=${url}, type=${type}, format=${format}, dir=${resolvedDir}`);
+    if (type === 'webpage') {
+      onProgress(30, 'Rendering webpage in background...');
+      const res = await captureWebpageDirect({ url, format, outputDir: resolvedDir, title });
+      onProgress(100, 'Webpage saved!');
+      logDebug(`link:download webpage success: ${res?.filePath}`);
+      return res;
+    }
+
+    if (type === 'spotify') {
+      const query = `ytsearch1:"${title} ${author || ''}"`;
+      const res = await downloadWithYtDlp({ query, format, outputDir: resolvedDir }, onProgress);
+      logDebug(`link:download spotify success: ${res?.filePath}`);
+      return res;
+    }
+
+    if (type === 'direct_media') {
+      const res = await downloadDirectFile({ url, outputDir: resolvedDir, filename: title }, onProgress);
+      logDebug(`link:download direct success: ${res?.filePath}`);
+      return res;
+    }
+
+    // Default: youtube / social
+    const res = await downloadWithYtDlp({ query: url, format, outputDir: resolvedDir }, onProgress);
+    logDebug(`link:download youtube/social success: ${res?.filePath}`);
+    return res;
+  } catch (err) {
+    logDebug(`link:download error: ${err.message}`);
+    return { success: false, message: err.message || 'Download failed' };
+  }
 });

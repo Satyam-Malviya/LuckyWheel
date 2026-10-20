@@ -284,7 +284,7 @@ export const InteractiveDesktopCanvas: React.FC<InteractiveDesktopCanvasProps> =
         if (heldMs > 160 && pointerMovedWhileWheelOpenRef.current && hoveredPetalIdx !== null && petals[hoveredPetalIdx]) {
           const target = petals[hoveredPetalIdx];
           // Keep wheel open if this option has sub-options (Speed, Trim, Exact KB, Passport, Rename)
-          if (target.presets || target.id === 'trimVideo') return;
+          if (target.presets || target.id === 'trimVideo' || target.id === 'downloadLink') return;
           handleTriggerPetal(target);
         }
       }
@@ -368,7 +368,7 @@ export const InteractiveDesktopCanvas: React.FC<InteractiveDesktopCanvasProps> =
           dragStateRef.current = null;
           setIsDraggingFile(false);
           const target = petals[hoveredPetalIdx];
-          if (!target.presets && target.id !== 'trimVideo') {
+          if (!target.presets && target.id !== 'trimVideo' && target.id !== 'downloadLink') {
             handleTriggerPetal(target);
           }
           return;

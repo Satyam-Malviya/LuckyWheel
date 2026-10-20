@@ -91,7 +91,18 @@ Need a file from your PC on your smartphone?
 2. Scan the on-screen QR code with your iPhone or Android camera.
 3. The file downloads directly over your local Wi-Fi network at blazing gigabit speeds without cables or cloud uploads!
 
-### 3. 🎨 275+ Supported Formats (100% Offline)
+### 3. 🔗 Universal Link & Media Downloader (YouTube, Spotify, Web)
+LuckyWheel now features a built-in **Link Downloader** right on the wheel!
+1. Press **`Alt+Space`** or **`Ctrl`** (Actions) and select **LINK DL**.
+2. Paste any link: **YouTube**, **Spotify**, **Instagram/TikTok/Twitter**, **Web Article**, or **Direct Download URL**.
+3. LuckyWheel instantly analyzes the link and provides one-click formats:
+   - **YouTube / Social Videos:** Download in `MP4 (1080p+)`, `MP4 (720p)`, `MP3 (320k)`, or `WAV (Lossless)`.
+   - **Spotify Music:** Downloads matching high-fidelity `MP3 (320k)`, `FLAC`, or `WAV` with embedded album art.
+   - **Webpages & Articles:** 1-click **Save as 300 DPI PDF**, **Full-Page PNG Screenshot**, or **Clean Text**.
+   - **Direct Media URLs:** Instant streaming download to your open Explorer directory or Downloads folder.
+4. Bundled with standalone **yt-dlp** & **FFmpeg** engines for 1000+ streaming sites without needing extra software.
+
+### 4. 🎨 275+ Supported Formats (100% Offline)
 - **Images:** `PNG`, `JPG`, `WebP`, `AVIF`, `HEIC`, `TIFF`, `BMP`, `ICO`, `SVG`
 - **Videos:** `MP4`, `MOV`, `MKV`, `WebM`, `AVI`, `GIF`
 - **Audio:** `MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `Opus`

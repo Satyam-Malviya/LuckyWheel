@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   createWifiShare: (filePath) => ipcRenderer.invoke('share:wifiQr', filePath),
   getSystemStatus: () => ipcRenderer.invoke('system:status'),
   getExplorerSelection: () => ipcRenderer.invoke('explorer:selection'),
+  detectLink: (url) => ipcRenderer.invoke('link:detect', url),
+  downloadLink: (payload) => ipcRenderer.invoke('link:download', payload),
+  onLinkProgress: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('link:progress', listener);
+    return () => ipcRenderer.removeListener('link:progress', listener);
+  },
   onProgress: (callback) => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('files:progress', listener);

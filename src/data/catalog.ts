@@ -415,6 +415,15 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
     icon: 'CopyCheck',
     badge: 'FOLDER',
   },
+  // Download from Link Tool
+  downloadLink: {
+    id: 'downloadLink',
+    label: 'LINK DL',
+    fullName: 'Download Media or Page from Link',
+    description: 'Paste YouTube, Spotify, video, or article link to download MP4, MP3, WAV, or PDF in 1 click.',
+    icon: 'Link',
+    badge: 'ONLINE',
+  },
   // Multi-File Mixed Combos
   comboVideoAudio: {
     id: 'comboVideoAudio',
@@ -436,6 +445,14 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
 
 // Quick File Actions (Control Wheel)
 export const FILE_ACTIONS_LIST: WheelPetalItem[] = [
+  {
+    id: 'downloadLink',
+    label: 'LINK DL',
+    fullName: 'Download Media or Page from Link',
+    description: 'Paste YouTube, Spotify, video, or article link to download MP4, MP3, WAV, or PDF in 1 click.',
+    icon: 'Link',
+    badge: 'NEW',
+  },
   {
     id: 'wifiQrShare',
     label: 'PHONE QR',
@@ -580,10 +597,10 @@ export function getWheelPetals(
     if (count > 1) {
       toolIds.push('joinVideos', 'compress', 'muteVideo', 'bulkRename', 'packZip');
     } else {
-      toolIds.push('compress', 'trimVideo', 'changeVideoSpeed', 'muteVideo', 'videoSnapshots', 'removeMetadata');
+      toolIds.push('compress', 'trimVideo', 'changeVideoSpeed', 'downloadLink', 'muteVideo', 'videoSnapshots', 'removeMetadata');
     }
   } else if (isAud(primary)) {
-    toolIds.push('normalizeAudio', 'vocalSplitter', 'audioToVideo', 'trimAudio', 'audioChannels', 'compress');
+    toolIds.push('normalizeAudio', 'vocalSplitter', 'downloadLink', 'audioToVideo', 'trimAudio', 'audioChannels', 'compress');
   } else if (primary === 'pdf') {
     if (count > 1) {
       toolIds.push('mergePDF', 'compress', 'unlockPDF', 'bulkRename', 'packZip');

@@ -538,7 +538,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
     effectiveIdx !== null &&
     effectiveIdx !== dismissedIdx &&
     activeItem &&
-    (activeItem.presets || activeItem.id === 'trimVideo')
+    (activeItem.presets || activeItem.id === 'trimVideo' || activeItem.id === 'downloadLink')
   );
 
   // Measure the centered sub-options card and tell the parent, so cursor hit-testing
@@ -612,7 +612,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 // Petals with sub-options (Speed, Trim, Exact KB, Passport...) just open their card
-                if (item.presets || item.id === 'trimVideo') {
+                if (item.presets || item.id === 'trimVideo' || item.id === 'downloadLink') {
                   soundEngine.playPetalTick(idx, total);
                   setDismissedIdx(null);
                   onSelectIndex(idx);
@@ -675,7 +675,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
             onPointerEnter={() => setHoveringSubMenu(true)}
             onPointerLeave={() => setHoveringSubMenu(false)}
             onClick={(e) => e.stopPropagation()}
-            className="pointer-events-auto w-[158px] rounded-[22px] bg-white backdrop-blur-2xl border border-black/15 p-2.5 shadow-[0_12px_32px_rgba(24,32,36,0.22)] flex flex-col items-center gap-1.5"
+            className={`pointer-events-auto rounded-[22px] ${activeItem.id === 'downloadLink' ? 'w-[218px]' : 'w-[158px]'} bg-white backdrop-blur-2xl border border-black/15 p-2.5 shadow-[0_12px_32px_rgba(24,32,36,0.22)] flex flex-col items-center gap-1.5`}
           >
             <div className="w-full flex items-center justify-between gap-1 px-0.5">
               <button
@@ -695,7 +695,202 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
             </div>
 
             {/* Special Start / End Time inputs for Trim Video / Audio */}
-            {activeItem.id === 'trimVideo' ? (
+            {activeItem.id === 'downloadLink' ? (
+              <div className="w-full space-y-2">
+                {isDownloading ? (
+                  <div className="w-full py-2 px-1 flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 text-[#ff5200]">
+                      <Icons.Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span className="text-[11px] font-bold">Downloading...</span>
+                    </div>
+                    <div className="w-full bg-black/10 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-[#ff5200] h-full transition-all duration-300 rounded-full"
+                        style={{ width: `${Math.min(100, Math.max(5, downloadProgress.percent))}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between w-full text-[9px] text-[#5d655f] font-medium px-0.5">
+                      <span className="truncate max-w-[130px]">{downloadProgress.statusText || 'Processing media...'}</span>
+                      <span className="font-bold text-[#1e211f]">{Math.round(downloadProgress.percent)}%</span>
+                    </div>
+                  </div>
+                ) : downloadResult ? (
+                  <div className="w-full py-1.5 px-0.5 flex flex-col items-center gap-2 text-center">
+                    {downloadResult.success ? (
+                      <>
+                        <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                          <Icons.Check className="w-4 h-4" strokeWidth={2.5} />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-bold text-emerald-700">Download Complete!</div>
+                          <div className="text-[9px] text-[#5d655f] truncate max-w-[190px] mt-0.5 font-medium">
+                            {downloadResult.filePath ? downloadResult.filePath.split(/[\\/]/).pop() : 'Saved to Downloads'}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 w-full mt-1">
+                          {downloadResult.filePath && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                                api?.revealInExplorer?.(downloadResult.filePath);
+                              }}
+                              className="py-1 px-1.5 rounded-lg bg-[#ff5200] text-white text-[9.5px] font-semibold hover:bg-[#e04800] transition-colors flex items-center justify-center gap-1"
+                            >
+                              <Icons.FolderOpen className="w-3 h-3" />
+                              Show in Folder
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleResetLink}
+                            className={`py-1 px-1.5 rounded-lg bg-[#f4f5f4] text-[#282b29] text-[9.5px] font-semibold hover:bg-black/10 transition-colors flex items-center justify-center gap-1 ${
+                              !downloadResult.filePath ? 'col-span-2' : ''
+                            }`}
+                          >
+                            <Icons.Plus className="w-3 h-3" />
+                            New Link
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+                          <Icons.AlertCircle className="w-4 h-4" />
+                        </div>
+                        <div className="text-[10px] font-bold text-rose-700">Download Failed</div>
+                        <div className="text-[8.5px] text-[#767d78] leading-tight max-h-12 overflow-y-auto px-1">
+                          {downloadResult.message || 'An error occurred during download'}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleResetLink}
+                          className="w-full py-1 rounded-lg bg-[#f4f5f4] text-[#282b29] text-[9.5px] font-semibold hover:bg-black/10"
+                        >
+                          Try Another Link
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : linkMeta ? (
+                  <div className="w-full space-y-1.5">
+                    <div className="flex items-center gap-1.5 bg-[#f7f8f7] p-1.5 rounded-xl border border-black/5">
+                      {linkMeta.thumbnail ? (
+                        <img
+                          src={linkMeta.thumbnail}
+                          alt=""
+                          className="w-8 h-8 rounded-lg object-cover border border-black/10 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-[#fff0e4] text-[#ff5200] flex items-center justify-center shrink-0">
+                          {linkMeta.type === 'youtube' ? (
+                            <Icons.Video className="w-4 h-4" />
+                          ) : linkMeta.type === 'spotify' ? (
+                            <Icons.Music className="w-4 h-4" />
+                          ) : linkMeta.type === 'webpage' ? (
+                            <Icons.Globe className="w-4 h-4" />
+                          ) : (
+                            <Icons.FileText className="w-4 h-4" />
+                          )}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[8px] font-semibold text-[#ff5200] uppercase tracking-wider truncate">
+                          {linkMeta.category}
+                        </div>
+                        <div className="text-[10px] font-bold text-[#1e211f] truncate leading-tight" title={linkMeta.title}>
+                          {linkMeta.title}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1 w-full max-h-[135px] overflow-y-auto pr-0.5">
+                      {linkMeta.formats.map((fmt) => (
+                        <button
+                          key={fmt.id}
+                          type="button"
+                          onClick={() => handleStartDownload(fmt)}
+                          className="flex items-center justify-between p-1.5 rounded-lg bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] transition-all group text-left"
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[9.5px] font-bold truncate leading-tight group-hover:text-white">
+                              {fmt.label}
+                            </span>
+                            <span className="text-[7.5px] text-[#767d78] group-hover:text-white/80 uppercase">
+                              .{fmt.ext}
+                            </span>
+                          </div>
+                          <span className="text-[7.5px] font-extrabold px-1 py-0.5 rounded bg-black/5 group-hover:bg-white/20 group-hover:text-white text-[#5d655f] shrink-0">
+                            {fmt.badge}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleResetLink}
+                      className="w-full text-center text-[9px] text-[#767d78] hover:text-[#ff5200] py-0.5 font-medium transition-colors"
+                    >
+                      ← Change Link
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full space-y-1.5">
+                    <div className="relative w-full">
+                      <input
+                        type="text"
+                        value={urlInput}
+                        onChange={(e) => {
+                          setUrlInput(e.target.value);
+                          if (detectError) setDetectError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleDetect();
+                        }}
+                        placeholder="Paste URL (YT, Spotify, Web...)"
+                        autoFocus
+                        className="w-full pl-2 pr-14 py-1.5 rounded-xl bg-[#f4f5f4] border border-black/10 text-[10.5px] font-medium text-[#1e211f] placeholder:text-[#9ea49f] focus:outline-none focus:border-[#ff5200] transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={handlePaste}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-white border border-black/10 hover:border-[#ff5200] text-[8.5px] font-bold text-[#5d655f] hover:text-[#ff5200] flex items-center gap-0.5 shadow-2xs transition-colors"
+                        title="Paste from clipboard"
+                      >
+                        <Icons.Clipboard className="w-2.5 h-2.5" />
+                        Paste
+                      </button>
+                    </div>
+
+                    {detectError && (
+                      <div className="text-[8.5px] text-rose-600 bg-rose-50 px-2 py-1 rounded-lg font-medium leading-tight text-center">
+                        {detectError}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={isDetecting || !urlInput.trim()}
+                      onClick={() => handleDetect()}
+                      className="w-full py-1.5 rounded-xl bg-[#ff5200] hover:bg-[#e04800] disabled:opacity-40 text-white text-[10px] font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                    >
+                      {isDetecting ? (
+                        <>
+                          <Icons.Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Detecting Formats...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icons.Sparkles className="w-3.5 h-3.5" />
+                          <span>Analyze & Download</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : activeItem.id === 'trimVideo' ? (
               <div className="w-full space-y-1.5">
                 <div className="grid grid-cols-2 gap-1 text-[10px]">
                   <label className="flex flex-col bg-[#f4f5f4] rounded-lg px-2 py-1 border border-black/5">

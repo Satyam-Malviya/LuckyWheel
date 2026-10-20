@@ -220,7 +220,7 @@ export const OverlayWheelView: React.FC = () => {
           const targetPetal = petals[hoveredIdx];
           // If the petal has sub-options (Speed, Trim, Exact KB, Passport, Rename),
           // keep the wheel open on release so the user can choose their sub-option in the Center Hub!
-          if (targetPetal.presets || targetPetal.id === 'trimVideo') {
+          if (targetPetal.presets || targetPetal.id === 'trimVideo' || targetPetal.id === 'downloadLink') {
             return;
           }
           executePetal(targetPetal);
@@ -287,7 +287,7 @@ export const OverlayWheelView: React.FC = () => {
         e.preventDefault();
         if (hoveredIdx !== null && petals[hoveredIdx]) {
           const targetPetal = petals[hoveredIdx];
-          if (!targetPetal.presets && targetPetal.id !== 'trimVideo') {
+          if (!targetPetal.presets && targetPetal.id !== 'trimVideo' && targetPetal.id !== 'downloadLink') {
             executePetal(targetPetal);
           }
         } else {
