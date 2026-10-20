@@ -379,26 +379,28 @@ function startExplorerWatcher() {
           const isVisible = !!(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible());
 
           if (ev.type === 'keydown') {
-            if (!isVisible) {
-              if (ev.key === 'Shift' || ev.key === 'Alt') {
-                const filesArr = Array.isArray(ev.files)
-                  ? ev.files.filter(Boolean)
-                  : ev.files
-                  ? [ev.files]
-                  : [];
-                if (filesArr.length > 0) {
-                  logDebug(`Overlay show triggered (${ev.mode}) for ${filesArr.length} file(s): ${filesArr[0]}`);
-                  showOverlayAtDipPoint(
-                    cursorDip.x,
-                    cursorDip.y,
-                    ev.mode || 'conversions',
-                    filesArr,
-                    !!ev.isDragging
-                  );
-                }
+            const filesArr = Array.isArray(ev.files)
+              ? ev.files.filter(Boolean)
+              : ev.files
+              ? [ev.files]
+              : [];
+
+            const distFromLast = Math.hypot(cursorDip.x - lastCursorDip.x, cursorDip.y - lastCursorDip.y);
+
+            // Re-anchor wheel at cursor if overlay is closed OR if cursor moved to a new position (>110px)
+            if (!isVisible || distFromLast > 110) {
+              if (filesArr.length > 0) {
+                logDebug(`Overlay show triggered (${ev.mode}) for ${filesArr.length} file(s): ${filesArr[0]}`);
+                showOverlayAtDipPoint(
+                  cursorDip.x,
+                  cursorDip.y,
+                  ev.mode || 'conversions',
+                  filesArr,
+                  !!ev.isDragging
+                );
               }
             } else {
-              // Overlay is already open -> switch wheel mode (Convert / Tools / Actions)
+              // Overlay is already open at the current cursor -> switch wheel mode (Convert / Tools / Actions)
               overlayWindow.webContents.send('overlay:event', {
                 type: 'mode',
                 mode: ev.mode || 'conversions',
