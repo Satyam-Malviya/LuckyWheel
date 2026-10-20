@@ -123,17 +123,29 @@ export const OverlayWheelView: React.FC = () => {
       if (item.id === 'passportPhoto') options.bgColor = String(presetValue || '#ffffff');
       if (item.id === 'bulkRename') options.renamePattern = String(presetValue || 'LuckyWheel_{n}');
 
-      const res = await api?.processFiles?.({
-        files,
-        mode,
-        actionId: item.id,
-        options,
-      });
+      try {
+        const res = await api?.processFiles?.({
+          files,
+          mode,
+          actionId: item.id,
+          options,
+        });
 
-      soundEngine.playDropConfirm();
-      setBusyText(null);
-      setDoneText(res?.message || `Saved ${item.label}!`);
-      setTimeout(hideOverlayNow, 800);
+        soundEngine.playDropConfirm();
+        setBusyText(null);
+        setDoneText(res?.message || `Saved ${item.label}!`);
+        setTimeout(() => {
+          hideOverlayNow();
+        }, 800);
+      } catch (err: any) {
+        setBusyText(null);
+        setDoneText(err?.message || 'Action failed');
+        setTimeout(() => {
+          hideOverlayNow();
+        }, 1200);
+      } finally {
+        isExecutingRef.current = false;
+      }
     },
     [files, mode, hideOverlayNow]
   );
@@ -204,18 +216,13 @@ export const OverlayWheelView: React.FC = () => {
         const dy = ev.dipY - centerDipRef.current.y;
         const dist = Math.hypot(dx, dy);
         // Only close overlay when clicking outside the wheel & mode bar
-        if (dist > 135 && !qrModal) {
+        if (dist > 220 && !qrModal) {
           hideOverlayNow();
         }
         return;
       }
 
       if (ev.type === 'keyrelease' || ev.type === 'mouseup') {
-        // If the center sub-options card is locked (e.g. typing URL in downloadLink), don't dismiss on keyrelease
-        if (subMenuRef.current?.locked) {
-          return;
-        }
-
         const elapsed = performance.now() - showTimestampRef.current;
         if (
           elapsed > 110 &&
@@ -225,16 +232,12 @@ export const OverlayWheelView: React.FC = () => {
         ) {
           const targetPetal = petals[hoveredIdx];
           // If the petal has sub-options (Speed, Trim, Exact KB, Passport, Rename, Link DL),
-          // keep the card open in center hub!
+          // keep the wheel open on release so the user can choose their sub-option in the Center Hub!
           if (targetPetal.presets || targetPetal.id === 'trimVideo' || targetPetal.id === 'downloadLink') {
             return;
           }
           executePetal(targetPetal);
-          return;
         }
-
-        // If no petal was selected and user released key/mouse: DISMISS IMMEDIATELY!
-        hideOverlayNow();
         return;
       }
 
@@ -349,7 +352,7 @@ export const OverlayWheelView: React.FC = () => {
           <p className="text-xs font-medium text-[#282b29] truncate">{qrModal.fileName}</p>
         </div>
       ) : (
-        <div className="pointer-events-auto">
+        <div onClick={(e) => e.stopPropagation()}>
           <RadialWheel
             key={showCount}
             onSubMenuStateChange={handleSubMenuState}

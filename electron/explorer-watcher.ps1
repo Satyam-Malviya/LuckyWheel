@@ -98,13 +98,9 @@ function Get-DesktopSelectedFiles {
         $deskHwnd = 0
         $desktop = $shell.Windows().FindWindowSW(0, 0, 8, [ref]$deskHwnd, 1)
         if ($null -ne $desktop) {
-            $items = $desktop.Document.SelectedItems()
-            foreach ($item in $items) {
+            foreach ($item in $desktop.Document.SelectedItems()) {
                 if ($item.Path) { $res += [string]$item.Path }
-                try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($item) | Out-Null } catch {}
             }
-            try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($items) | Out-Null } catch {}
-            try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($desktop) | Out-Null } catch {}
         }
     } catch {}
     return ($res | Select-Object -Unique)
@@ -115,17 +111,11 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
     # (= the active tab). Never look at any other Explorer window.
     $tabs = @()
     try {
-        $wins = $shell.Windows()
-        foreach ($win in $wins) {
+        foreach ($win in $shell.Windows()) {
             try {
-                if ([int64]$win.HWND -eq $hwndInt) { 
-                    $tabs += $win 
-                } else {
-                    try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($win) | Out-Null } catch {}
-                }
+                if ([int64]$win.HWND -eq $hwndInt) { $tabs += $win }
             } catch {}
         }
-        try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wins) | Out-Null } catch {}
     } catch {}
     if ($tabs.Count -eq 0) { return @() }
 
@@ -136,11 +126,7 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
         foreach ($t in $tabs) {
             try {
                 $loc = [string]$t.LocationName
-                if ($loc -and $fgTitle -and $fgTitle.StartsWith($loc)) { 
-                    $active = $t 
-                } else {
-                    try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($t) | Out-Null } catch {}
-                }
+                if ($loc -and $fgTitle -and $fgTitle.StartsWith($loc)) { $active = $t; break }
             } catch {}
         }
         # Can't tell which tab is active -> safest is to do nothing
@@ -149,13 +135,9 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
 
     $res = @()
     try {
-        $items = $active.Document.SelectedItems()
-        foreach ($item in $items) {
+        foreach ($item in $active.Document.SelectedItems()) {
             if ($item.Path) { $res += [string]$item.Path }
-            try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($item) | Out-Null } catch {}
         }
-        try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($items) | Out-Null } catch {}
-        try { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($active) | Out-Null } catch {}
     } catch {}
     return ($res | Select-Object -Unique)
 }
@@ -221,22 +203,11 @@ while ($true) {
 
         # Skip only if the main LuckyWheel studio dashboard window is actively focused
         $isMainDashboardFocused = ($fgTitle -match "Radial File Converter")
-        $isOverlayWindow = ($fgTitle -match "LuckyWheelOverlayWindow" -or $fgTitle -match "LuckyWheel")
 
         $isExplorerOrDesktop = ($fgClass -eq "CabinetWClass" -or $fgClass -eq "ExploreWClass" -or $fgClass -eq "Progman" -or $fgClass -eq "WorkerW")
 
-        if ($isOverlayWindow) {
-            # While overlay is visible/focused, emit keydown to switch modes
-            Emit-Json @{
-                type       = "keydown"
-                key        = $keyName
-                mode       = $mode
-                x          = $pt.X
-                y          = $pt.Y
-                files      = @()
-                isDragging = $isLBtn
-            }
-        } elseif ($isExplorerOrDesktop -and -not $isMainDashboardFocused -and ($focusedCtrl -notmatch "Edit")) {
+        # Never trigger in other apps, or while renaming / typing in the address/search box
+        if ($isExplorerOrDesktop -and -not $isMainDashboardFocused -and ($focusedCtrl -notmatch "Edit")) {
             $files = @(Get-BestSelectedFiles $fgHwnd $fgClass $fgTitle)
             if ($files.Count -gt 0) {
                 Emit-Json @{
