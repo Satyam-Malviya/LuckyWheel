@@ -19,6 +19,7 @@ interface OverlayEventPayload {
   centerDipX?: number;
   centerDipY?: number;
   files?: string[];
+  currentDir?: string;
   isDragging?: boolean;
 }
 
@@ -28,6 +29,7 @@ export const OverlayWheelView: React.FC = () => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [busyText, setBusyText] = useState<string | null>(null);
   const [doneText, setDoneText] = useState<string | null>(null);
+  const [currentDir, setCurrentDir] = useState<string>('');
   const [qrModal, setQrModal] = useState<{
     fileName: string;
     url: string;
@@ -170,6 +172,7 @@ export const OverlayWheelView: React.FC = () => {
         setQrModal(null);
         // Always reset files to current event files to prevent carrying over stale files
         setFiles(Array.isArray(ev.files) ? ev.files : []);
+        if (ev.currentDir) setCurrentDir(ev.currentDir);
         const nextMode = ev.mode || 'conversions';
         setMode(nextMode);
         setHoveredIdx(null);
@@ -261,20 +264,22 @@ export const OverlayWheelView: React.FC = () => {
       }
     });
 
-    const unsubSs = api?.onScreenshotTrigger?.(() => {
-      setMode('actions');
-      const actionPetals = getWheelPetals(['folder'], 'actions', []);
-      const idx = actionPetals.findIndex((p) => p.id === 'screenCapture');
-      if (idx !== -1) {
-        setHoveredIdx(idx);
-      }
-    });
-
     return () => {
       unsub?.();
-      unsubSs?.();
     };
   }, [petals, hoveredIdx, qrModal, executePetal, hideOverlayNow]);
+
+  // Dedicated top-level listener for global Alt+S shortcut
+  useEffect(() => {
+    const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+    if (!api?.onScreenshotTrigger) return;
+    const unsub = api.onScreenshotTrigger(() => {
+      setMode('actions');
+      setHoveredIdx(0);
+      subMenuRef.current = { locked: true, halfW: 130, halfH: 155 };
+    });
+    return () => unsub?.();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -393,8 +398,9 @@ export const OverlayWheelView: React.FC = () => {
             theme={{ ...WHEEL_THEMES[0], accentHex: '#ff5200' }}
             size={272}
             fileCount={files.length}
+            currentDir={currentDir}
             sourceLabel={
-              files.length > 1 ? `${files.length} files` : primaryFileName
+              files.length > 1 ? `${files.length} files` : primaryFileName || (currentDir ? currentDir.split(/[\\/]/).pop() : '')
             }
           />
         </div>

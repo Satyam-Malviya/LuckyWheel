@@ -16,6 +16,7 @@ interface WheelShowcaseSectionProps {
 }
 
 const CATEGORIES = [
+  { id: 'Online & Screen', label: 'Online & Screen (New)', ext: ['folder'], icon: './assets/icons/zip.png' },
   { id: 'Images', label: 'Images', ext: ['jpg'], icon: './assets/icons/jpg.png' },
   { id: 'Video', label: 'Video', ext: ['mov'], icon: './assets/icons/mov.png' },
   { id: 'Audio', label: 'Audio', ext: ['mp3'], icon: './assets/icons/mp3.png' },

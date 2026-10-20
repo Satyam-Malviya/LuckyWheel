@@ -9,6 +9,14 @@ import {
   CheckCircle2,
   Trash2,
   X,
+  Camera,
+  Link as LinkIcon,
+  Monitor,
+  AppWindow,
+  Timer,
+  Loader2,
+  Download,
+  Sparkles,
 } from 'lucide-react';
 import {
   INITIAL_PLUGINS,
@@ -18,7 +26,7 @@ import {
   WheelTheme,
 } from './data/catalog';
 import { InteractiveDesktopCanvas, PlaygroundFileItem } from './components/InteractiveDesktopCanvas';
-import { HeroMotionShowreel } from './components/MotionGraphicPreview';
+import { HeroMotionShowreel, MotionGraphicPreview } from './components/MotionGraphicPreview';
 import { PluginHubSection } from './components/PluginHubSection';
 import { WheelShowcaseSection } from './components/WheelShowcaseSection';
 import { soundEngine } from './utils/sound';
@@ -44,6 +52,88 @@ export function App() {
     text: string;
     resultMsg?: string;
   }>({ open: false, text: '' });
+
+  // Main Software Link Downloader State
+  const [mainUrlInput, setMainUrlInput] = useState('');
+  const [isMainUrlBusy, setIsMainUrlBusy] = useState(false);
+  const [mainUrlProgressText, setMainUrlProgressText] = useState('');
+  const [mainUrlResult, setMainUrlResult] = useState<{ success: boolean; message: string; filePath?: string } | null>(null);
+
+  // Main Software Screen Snip State
+  const [isMainSnipBusy, setIsMainSnipBusy] = useState(false);
+  const [mainSnipResult, setMainSnipResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleMainAppDownload = async () => {
+    const url = mainUrlInput.trim();
+    if (!url) return;
+    setIsMainUrlBusy(true);
+    setMainUrlProgressText('Analyzing link...');
+    setMainUrlResult(null);
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const detected = await api?.detectLink?.(url);
+      const meta = detected?.meta || (detected?.formats ? detected : null);
+      if (!meta || !meta.formats?.length) {
+        setMainUrlResult({ success: false, message: 'Could not detect link formats. Please check the URL.' });
+        setIsMainUrlBusy(false);
+        return;
+      }
+      setMainUrlProgressText('Downloading 8-stream media...');
+      const bestFmt = meta.formats[0];
+      const res = await api?.downloadLink?.({
+        url,
+        type: meta.type,
+        format: bestFmt.id,
+        formatId: bestFmt.id,
+        ext: bestFmt.ext,
+        title: meta.title,
+        author: meta.author,
+      });
+      if (res && res.success) {
+        soundEngine.playDropConfirm();
+        setMainUrlResult({
+          success: true,
+          message: `Saved: ${res.filePath ? res.filePath.split(/[\\/]/).pop() : 'Downloaded successfully!'}`,
+          filePath: res.filePath,
+        });
+      } else {
+        setMainUrlResult({ success: false, message: res?.message || 'Download failed.' });
+      }
+    } catch (err: any) {
+      setMainUrlResult({ success: false, message: err?.message || 'Download failed.' });
+    } finally {
+      setIsMainUrlBusy(false);
+    }
+  };
+
+  const handleMainAppCapture = async (mode: 'screen' | 'window' | 'region' = 'screen', delayMs = 0) => {
+    setIsMainSnipBusy(true);
+    setMainSnipResult(null);
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const cap = await api?.captureScreen?.({ mode, delayMs });
+      if (cap && cap.success && cap.filePath) {
+        const dirs = await api?.getSystemDirectories?.();
+        const dests = [dirs?.desktop, dirs?.pictures].filter(Boolean);
+        const saveRes = await api?.saveScreenshot?.({
+          sourcePath: cap.filePath,
+          format: 'png',
+          destinations: dests,
+        });
+        soundEngine.playDropConfirm();
+        setMainSnipResult({
+          success: true,
+          message: saveRes?.message || 'Screenshot captured and saved to Desktop & Clipboard!',
+        });
+      } else {
+        setMainSnipResult({ success: false, message: cap?.message || 'Capture cancelled or failed.' });
+      }
+    } catch (err: any) {
+      setMainSnipResult({ success: false, message: err?.message || 'Capture failed.' });
+    } finally {
+      setIsMainSnipBusy(false);
+    }
+  };
 
   const toggleSound = () => {
     const next = !soundEnabled;
@@ -166,6 +256,27 @@ export function App() {
 
               <button
                 type="button"
+                onClick={() => handleMainAppCapture('screen')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#dfe2df] hover:border-[#ff5200] text-xs font-medium text-[#282b29] transition-colors shadow-sm"
+                title="Capture Screenshot (Alt+S)"
+              >
+                <Camera className="w-3.5 h-3.5 text-[#06b6d4]" />
+                <span className="hidden sm:inline">Snip</span>
+                <kbd className="text-[9.5px] bg-black/5 px-1 py-0.2 rounded font-mono text-[#5d655f]">Alt+S</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollTo('new-features-spotlight')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#dfe2df] hover:border-[#ff5200] text-xs font-medium text-[#282b29] transition-colors shadow-sm"
+                title="Universal Link Downloader"
+              >
+                <LinkIcon className="w-3.5 h-3.5 text-[#ff5200]" />
+                <span className="hidden sm:inline">Link DL</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleOpenClipboardWheel}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white border border-[#dfe2df] hover:border-[#c8ccc8] text-xs font-medium text-[#282b29] transition-colors shadow-sm"
                 title="Clipboard Wheel"
@@ -237,6 +348,181 @@ export function App() {
             externalTriggerPetalId={externalTriggerPetalId}
             onClearExternalTrigger={() => setExternalTriggerPetalId(null)}
           />
+        </section>
+
+        {/* NEW FEATURE SPOTLIGHT: Universal Link Downloader & Smart Screen Snip Studio */}
+        <section id="new-features-spotlight" className="max-w-[1040px] mx-auto px-6 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 border-b border-[#e6e8e5] pb-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#fff0e4] text-[#ff5200] text-xs font-bold mb-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>NEW POWER FEATURES</span>
+              </div>
+              <h2 className="text-3xl font-medium tracking-[-1.2px] text-[#282b29]">
+                Turbo Link Downloader &amp; Screen Snip Studio
+              </h2>
+              <p className="text-sm text-[#767d78] mt-1">
+                Zero-upload offline privacy, 8-stream parallel speeds, and system-wide <kbd className="px-1.5 py-0.5 rounded bg-white border border-[#dadfd6] text-xs font-bold">Alt + S</kbd> shortcut.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Card 1: Universal Turbo Link Downloader */}
+            <div className="rounded-[24px] bg-white border border-[#e6e6e6] p-6 shadow-sm flex flex-col justify-between space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-[#ff5200] uppercase tracking-wider flex items-center gap-1.5">
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    <span>Universal Link Downloader</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                    8× TURBO STREAM
+                  </span>
+                </div>
+                <h3 className="text-xl font-medium text-[#282b29]">
+                  YouTube, Spotify &amp; Web Articles
+                </h3>
+                <p className="text-xs text-[#767d78] mt-1 leading-relaxed">
+                  Downloads directly into your active folder. 1080p MP4 videos, 320kbps MP3s (audio-stream direct), and 300 DPI vector PDFs.
+                </p>
+
+                <div className="my-4">
+                  <MotionGraphicPreview type="link-download" compact={true} />
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-3 border-t border-[#f0f0ee]">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={mainUrlInput}
+                    onChange={(e) => setMainUrlInput(e.target.value)}
+                    placeholder="Paste link (YouTube, Spotify, Web...)"
+                    className="flex-1 px-3 py-2 rounded-xl bg-[#f4f5f4] border border-black/10 text-xs font-medium text-[#282b29] placeholder:text-[#9ea49f] focus:outline-none focus:border-[#ff5200]"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                      const text = await api?.readClipboard?.();
+                      if (text) setMainUrlInput(typeof text === 'string' ? text : text.text || '');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-[#f4f5f4] hover:bg-black/10 text-xs font-semibold text-[#5d655f] transition-colors"
+                  >
+                    Paste
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isMainUrlBusy || !mainUrlInput.trim()}
+                  onClick={handleMainAppDownload}
+                  className="w-full py-2.5 rounded-xl bg-[#ff5200] hover:bg-[#e04800] disabled:opacity-40 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {isMainUrlBusy ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{mainUrlProgressText || 'Downloading...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Download in Active Folder</span>
+                    </>
+                  )}
+                </button>
+
+                {mainUrlResult && (
+                  <div className={`p-2.5 rounded-xl text-xs font-medium ${mainUrlResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                    {mainUrlResult.message}
+                    {mainUrlResult.filePath && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                          api?.revealInExplorer?.(mainUrlResult.filePath!);
+                        }}
+                        className="block mt-1 text-[#ff5200] hover:underline font-bold"
+                      >
+                        Show File in Explorer →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 2: Smart Screen Capture & Snip Studio */}
+            <div className="rounded-[24px] bg-white border border-[#e6e6e6] p-6 shadow-sm flex flex-col justify-between space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-[#06b6d4] uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>Screen Capture Studio</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600 border border-cyan-200">
+                    SHORTCUT: ALT + S
+                  </span>
+                </div>
+                <h3 className="text-xl font-medium text-[#282b29]">
+                  Area Snip, Active Window &amp; Fullscreen
+                </h3>
+                <p className="text-xs text-[#767d78] mt-1 leading-relaxed">
+                  Ultra-fast &lt;30ms native capture. Save to PNG, JPG, WebP, or 300 DPI PDF, and write to multiple destination folders simultaneously.
+                </p>
+
+                <div className="my-4">
+                  <MotionGraphicPreview type="screen-capture" compact={true} />
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-3 border-t border-[#f0f0ee]">
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    disabled={isMainSnipBusy}
+                    onClick={() => handleMainAppCapture('screen')}
+                    className="py-2.5 px-3 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 group shadow-2xs"
+                  >
+                    <Monitor className="w-4 h-4 text-[#ff5200] group-hover:text-white" />
+                    <span>Full Screen</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isMainSnipBusy}
+                    onClick={() => handleMainAppCapture('window')}
+                    className="py-2.5 px-3 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 group shadow-2xs"
+                  >
+                    <AppWindow className="w-4 h-4 text-[#ff5200] group-hover:text-white" />
+                    <span>Active Window</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isMainSnipBusy}
+                    onClick={() => handleMainAppCapture('screen', 3000)}
+                    className="py-2.5 px-3 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 group shadow-2xs"
+                  >
+                    <Timer className="w-4 h-4 text-[#ff5200] group-hover:text-white" />
+                    <span>3s Timer</span>
+                  </button>
+                </div>
+
+                {mainSnipResult && (
+                  <div className={`p-2.5 rounded-xl text-xs font-medium ${mainSnipResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                    {mainSnipResult.message}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-[#767d78] px-1">
+                  <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#f4f5f4] border border-[#dadfd6] font-bold text-[#282b29]">Alt + S</kbd> anytime</span>
+                  <span className="text-[#06b6d4] font-semibold">Multi-Location Save ✓</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* 2. Home Screen Power-Ups & Plugin Hub */}

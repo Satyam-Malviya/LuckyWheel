@@ -20,6 +20,7 @@ interface RadialWheelProps {
   size?: number;
   fileCount?: number;
   sourceLabel?: string;
+  currentDir?: string;
   /**
    * Reports the centered sub-options card state so the parent (which hit-tests the cursor itself)
    * can stop switching petals while the cursor is over the card or the card is locked.
@@ -502,6 +503,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
   theme,
   size = 272,
   sourceLabel,
+  currentDir,
   onSubMenuStateChange,
 }) => {
   const safeItems = items.slice(0, 9);
@@ -520,6 +522,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
   const [trimEndSec, setTrimEndSec] = useState<string>('10');
   // Custom KB input for Exact-KB Compressor
   const [customKbVal, setCustomKbVal] = useState<string>('45');
+  const [customSaveDir, setCustomSaveDir] = useState<string | null>(null);
 
   // Link Downloader State
   const [urlInput, setUrlInput] = useState<string>('');
@@ -608,6 +611,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
         isVideo: fmt.isVideo,
         isAudio: fmt.isAudio,
         isWebpage: fmt.isWebpage,
+        outputDir: customSaveDir || currentDir || undefined,
       });
       unsub?.();
       if (res && res.success) {
@@ -1070,6 +1074,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
                       </div>
                       <div className="space-y-0.5 max-h-[64px] overflow-y-auto pr-0.5">
                         {[
+                          ...(currentDir ? [{ label: `Current Folder (${currentDir.split(/[\\/]/).pop()})`, path: currentDir }] : []),
                           { label: 'Desktop', path: systemDirs.desktop },
                           { label: 'Downloads', path: systemDirs.downloads },
                           { label: 'Screenshots', path: systemDirs.pictures },
@@ -1297,6 +1302,24 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
                       </div>
                     </div>
 
+                    {/* Current Destination Folder Display & Switcher */}
+                    <div className="flex items-center justify-between text-[8px] text-[#5d655f] bg-[#f4f5f4] px-2 py-0.5 rounded-lg font-medium">
+                      <span className="truncate max-w-[140px]" title={customSaveDir || currentDir || 'Downloads'}>
+                        📁 Save in: <strong className="text-[#1e211f]">{(customSaveDir || currentDir || 'Downloads').split(/[\\/]/).pop()}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                          const picked = await api?.pickDirectory?.();
+                          if (picked) setCustomSaveDir(picked);
+                        }}
+                        className="text-[#ff5200] hover:underline font-bold text-[7.5px] ml-1 shrink-0"
+                      >
+                        Change
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-1 w-full max-h-[135px] overflow-y-auto pr-0.5">
                       {linkMeta.formats.map((fmt) => (
                         <button
@@ -1364,6 +1387,23 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
                         {detectError}
                       </div>
                     )}
+
+                    <div className="flex items-center justify-between text-[7.5px] text-[#767d78] px-1 font-medium">
+                      <span className="truncate max-w-[140px]">
+                        📁 Target: <strong className="text-[#282b29]">{(customSaveDir || currentDir || 'Current Folder / Downloads').split(/[\\/]/).pop()}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                          const picked = await api?.pickDirectory?.();
+                          if (picked) setCustomSaveDir(picked);
+                        }}
+                        className="text-[#ff5200] hover:underline font-bold"
+                      >
+                        Change
+                      </button>
+                    </div>
 
                     <button
                       type="button"

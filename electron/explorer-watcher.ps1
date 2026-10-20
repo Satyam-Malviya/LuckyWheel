@@ -153,7 +153,7 @@ function Get-DesktopSelectedFiles {
     return ($res | Select-Object -Unique)
 }
 
-function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle, [IntPtr]$focusedHwnd) {
+function Get-ExplorerFolderAndFiles([int64]$hwndInt, [string]$fgTitle, [IntPtr]$focusedHwnd) {
     # Query tabs belonging to this Explorer window
     $tabs = @()
     try {
@@ -205,24 +205,41 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle, [Int
         if ($null -eq $active) { $active = $tabs[0] }
     }
 
+    $folderPath = ""
+    try {
+        $folderPath = [string]$active.Document.Folder.Self.Path
+    } catch {}
+
     $res = @()
     try {
         foreach ($item in $active.Document.SelectedItems()) {
             if ($item.Path) { $res += [string]$item.Path }
         }
     } catch {}
-    return ($res | Select-Object -Unique)
+
+    if ($res.Count -gt 0 -and [string]::IsNullOrEmpty($folderPath)) {
+        try {
+            $folderPath = [System.IO.Path]::GetDirectoryName($res[0])
+        } catch {}
+    }
+
+    return @{
+        folder = $folderPath
+        files  = @($res | Select-Object -Unique)
+    }
 }
 
-function Get-BestSelectedFiles([IntPtr]$fgHwnd, [string]$fgClass, [string]$fgTitle, [IntPtr]$focusedHwnd) {
-    # STRICT: only the foreground window counts.
+function Get-BestFolderAndFiles([IntPtr]$fgHwnd, [string]$fgClass, [string]$fgTitle, [IntPtr]$focusedHwnd) {
     if ($fgClass -eq "Progman" -or $fgClass -eq "WorkerW") {
-        return @(Get-DesktopSelectedFiles)
+        return @{
+            folder = [Environment]::GetFolderPath('Desktop')
+            files  = @(Get-DesktopSelectedFiles)
+        }
     }
     if ($fgClass -eq "CabinetWClass" -or $fgClass -eq "ExploreWClass") {
-        return @(Get-ExplorerSelectedFilesByHwnd ($fgHwnd.ToInt64()) $fgTitle $focusedHwnd)
+        return (Get-ExplorerFolderAndFiles ($fgHwnd.ToInt64()) $fgTitle $focusedHwnd)
     }
-    return @()
+    return @{ folder = ""; files = @() }
 }
 
 function Emit-Json($hashtable) {
@@ -282,7 +299,16 @@ while ($true) {
 
         # Never trigger in other apps, or while renaming / typing in the address/search box
         if ($isExplorerOrDesktop -and -not $isMainDashboardFocused -and ($focusedCtrl -notmatch "Edit")) {
-            $files = @(Get-BestSelectedFiles $fgHwnd $fgClass $fgTitle $focusedHwnd)
+            $folderData = Get-BestFolderAndFiles $fgHwnd $fgClass $fgTitle $focusedHwnd
+            $files = @($folderData.files)
+            $curDir = [string]$folderData.folder
+
+            # If user pressed in an empty directory or on Desktop with nothing selected,
+            # allow opening the actions wheel (for LINK DL, Screen Snip, etc.)
+            if ($files.Count -eq 0 -and $curDir -ne "" -and ($mode -eq "actions" -or $mode -eq "tools")) {
+                $files = @($curDir)
+            }
+
             if ($files.Count -gt 0) {
                 Emit-Json @{
                     type       = "keydown"
@@ -291,6 +317,7 @@ while ($true) {
                     x          = $pt.X
                     y          = $pt.Y
                     files      = $files
+                    currentDir = $curDir
                     isDragging = $isLBtn
                     fgClass    = $fgClass
                     hoverClass = $hoverClass

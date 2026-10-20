@@ -46,6 +46,7 @@ let lastCursorDip = { x: -1, y: -1 };
 let tray = null;
 let isQuitting = false;
 let watcherProcess = null;
+let lastActiveExplorerDir = '';
 let sharedFilesMap = new Map();
 let shareServerPort = null;
 
@@ -320,7 +321,7 @@ function createOverlayWindow() {
   }
 }
 
-function showOverlayAtDipPoint(dipX, dipY, mode, files, dragging = false) {
+function showOverlayAtDipPoint(dipX, dipY, mode, files, dragging = false, currentDir = '') {
   if (!overlayWindow || overlayWindow.isDestroyed()) return;
   const bounds = {
     x: Math.round(dipX - OVERLAY_W / 2),
@@ -330,8 +331,9 @@ function showOverlayAtDipPoint(dipX, dipY, mode, files, dragging = false) {
   };
   overlayWindow.setBounds(bounds, false);
   overlayWindow.setAlwaysOnTop(true, 'screen-saver');
-  // Use showInactive so File Explorer / Desktop NEVER loses selection focus and the wheel blooms in <5ms!
   overlayWindow.showInactive();
+
+  const resolvedDir = currentDir || lastActiveExplorerDir || app.getPath('desktop');
 
   lastCursorDip = { x: dipX, y: dipY };
   overlayWindow.webContents.send('overlay:event', {
@@ -340,6 +342,7 @@ function showOverlayAtDipPoint(dipX, dipY, mode, files, dragging = false) {
     centerDipX: dipX,
     centerDipY: dipY,
     files: files && files.length ? files : [],
+    currentDir: resolvedDir,
     isDragging: !!dragging,
   });
 
@@ -396,9 +399,19 @@ function startExplorerWatcher() {
           const cursorDip = screen.getCursorScreenPoint();
           const isVisible = !!(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible());
 
+          if (ev.currentDir && fs.existsSync(ev.currentDir)) {
+            lastActiveExplorerDir = ev.currentDir;
+          } else if (ev.files && ev.files.length > 0 && fs.existsSync(ev.files[0])) {
+            try {
+              lastActiveExplorerDir = fs.statSync(ev.files[0]).isDirectory()
+                ? ev.files[0]
+                : path.dirname(ev.files[0]);
+            } catch {}
+          }
+
           if (ev.type === 'keydown') {
             if (!isVisible) {
-              if (ev.key === 'Shift' || ev.key === 'Alt') {
+              if (ev.key === 'Shift' || ev.key === 'Alt' || ev.key === 'Ctrl') {
                 const filesArr = Array.isArray(ev.files)
                   ? ev.files.filter(Boolean)
                   : ev.files
@@ -411,7 +424,8 @@ function startExplorerWatcher() {
                     cursorDip.y,
                     ev.mode || 'conversions',
                     filesArr,
-                    !!ev.isDragging
+                    !!ev.isDragging,
+                    lastActiveExplorerDir
                   );
                 }
               }
@@ -533,17 +547,22 @@ app.whenReady().then(() => {
     console.warn('Global shortcut registration warning:', e.message);
   }
 
-  // Register Global Hotkey: Alt+S for instant Screen Capture Studio
+  // Register Global Hotkeys: Alt+S, Ctrl+Alt+S, Alt+Shift+S for instant Screen Capture Studio
+  const triggerScreenCaptureStudio = () => {
+    logDebug('Global shortcut triggered Screen Capture Studio!');
+    const cursor = screen.getCursorScreenPoint();
+    showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false, lastActiveExplorerDir);
+    setTimeout(() => {
+      overlayWindow?.webContents.send('screenshot:trigger', { autoTrigger: true });
+    }, 40);
+  };
+
   try {
-    globalShortcut.register('Alt+S', async () => {
-      const cursor = screen.getCursorScreenPoint();
-      showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false);
-      setTimeout(() => {
-        overlayWindow?.webContents.send('screenshot:trigger', { autoTrigger: true });
-      }, 60);
-    });
+    globalShortcut.register('Alt+S', triggerScreenCaptureStudio);
+    globalShortcut.register('CommandOrControl+Alt+S', triggerScreenCaptureStudio);
+    globalShortcut.register('Alt+Shift+S', triggerScreenCaptureStudio);
   } catch (e) {
-    console.warn('Alt+S global shortcut registration warning:', e.message);
+    logDebug('Screen capture global shortcut registration warning: ' + e.message);
   }
 });
 
@@ -740,12 +759,18 @@ ipcMain.handle('link:detect', async (_e, url) => {
 ipcMain.handle('link:download', async (_e, payload) => {
   const { url, type, outputDir, title, author } = payload || {};
   const format = payload?.format || payload?.formatId || payload?.ext || 'mp4-best';
-  let resolvedDir =
-    outputDir && fs.existsSync(outputDir)
-      ? fs.statSync(outputDir).isDirectory()
-        ? outputDir
-        : path.dirname(outputDir)
-      : app.getPath('downloads');
+  let resolvedDir = '';
+  if (outputDir && fs.existsSync(outputDir)) {
+    try {
+      resolvedDir = fs.statSync(outputDir).isDirectory() ? outputDir : path.dirname(outputDir);
+    } catch {}
+  }
+  if (!resolvedDir && lastActiveExplorerDir && fs.existsSync(lastActiveExplorerDir)) {
+    resolvedDir = lastActiveExplorerDir;
+  }
+  if (!resolvedDir) {
+    resolvedDir = app.getPath('downloads');
+  }
 
   const onProgress = (percent, statusText) => {
     overlayWindow?.webContents.send('link:progress', { percent, statusText });
