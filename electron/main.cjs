@@ -119,25 +119,42 @@ function getWindowsExplorerSelectedFiles() {
 
     if (process.platform !== 'win32') return resolve([]);
     const psScript = `
+      Add-Type @"
+      using System;
+      using System.Runtime.InteropServices;
+      public class FgWinCheck {
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll", CharSet = CharSet.Auto)] public static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+      }
+"@;
+      $fg = [FgWinCheck]::GetForegroundWindow();
+      $sb = New-Object System.Text.StringBuilder 128;
+      [void][FgWinCheck]::GetClassName($fg, $sb, 128);
+      $cls = $sb.ToString();
       $shell = New-Object -ComObject Shell.Application;
       $paths = @();
-      try {
-        $h = 0;
-        $d = $shell.Windows().FindWindowSW(0, 0, 8, [ref]$h, 1);
-        if ($null -ne $d) {
-          foreach ($item in $d.Document.SelectedItems()) {
-            if ($item.Path) { $paths += [string]$item.Path }
-          }
-        }
-      } catch {}
-      if ($paths.Count -eq 0) {
-        foreach ($win in $shell.Windows()) {
-          try {
-            $sel = $win.Document.SelectedItems();
-            foreach ($item in $sel) {
+
+      if ($cls -eq "Progman" -or $cls -eq "WorkerW") {
+        try {
+          $h = 0;
+          $d = $shell.Windows().FindWindowSW(0, 0, 8, [ref]$h, 1);
+          if ($null -ne $d) {
+            foreach ($item in $d.Document.SelectedItems()) {
               if ($item.Path) { $paths += [string]$item.Path }
             }
-            if ($paths.Count -gt 0) { break }
+          }
+        } catch {}
+      } elseif ($cls -eq "CabinetWClass" -or $cls -eq "ExploreWClass") {
+        $fgHwnd = $fg.ToInt64();
+        foreach ($win in $shell.Windows()) {
+          try {
+            if ([int64]$win.HWND -eq $fgHwnd) {
+              $sel = $win.Document.SelectedItems();
+              foreach ($item in $sel) {
+                if ($item.Path) { $paths += [string]$item.Path }
+              }
+              if ($paths.Count -gt 0) { break }
+            }
           } catch {}
         }
       }

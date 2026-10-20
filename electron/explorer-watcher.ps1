@@ -6,6 +6,21 @@ using System;
 using System.Text;
 using System.Runtime.InteropServices;
 
+[ComImport]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+[Guid("6d5140c1-7436-11ce-8034-00aa006009fa")]
+public interface IServiceProvider {
+    [PreserveSig]
+    int QueryService(ref Guid guidService, ref Guid riid, out IntPtr ppvObject);
+}
+
+[ComImport]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+[Guid("000214E2-0000-0000-C000-000000000046")]
+public interface IShellBrowser {
+    [PreserveSig] int GetWindow(out IntPtr phwnd);
+}
+
 public class Win32Watcher {
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT {
@@ -58,6 +73,33 @@ public class Win32Watcher {
     [DllImport("user32.dll")]
     public static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
 
+    [DllImport("user32.dll")]
+    public static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    private static readonly Guid SID_STopLevelBrowser = new Guid("4C96BE40-915C-11CF-99D3-00AA004AE837");
+    private static readonly Guid IID_IShellBrowser = new Guid("000214E2-0000-0000-C000-000000000046");
+
+    public static IntPtr GetTabHwnd(object webBrowserCom) {
+        try {
+            IServiceProvider sp = (IServiceProvider)webBrowserCom;
+            Guid service = SID_STopLevelBrowser;
+            Guid iid = IID_IShellBrowser;
+            IntPtr pSb;
+            int hr = sp.QueryService(ref service, ref iid, out pSb);
+            if (hr == 0 && pSb != IntPtr.Zero) {
+                IShellBrowser sb = (IShellBrowser)Marshal.GetObjectForIUnknown(pSb);
+                IntPtr hwnd;
+                sb.GetWindow(out hwnd);
+                Marshal.Release(pSb);
+                return hwnd;
+            }
+        } catch {}
+        return IntPtr.Zero;
+    }
+
     public static string GetWndClass(IntPtr hWnd) {
         if (hWnd == IntPtr.Zero) return "";
         StringBuilder sb = new StringBuilder(128);
@@ -72,16 +114,21 @@ public class Win32Watcher {
         return sb.ToString();
     }
 
-    public static string GetFocusedControlClass(IntPtr fgHwnd) {
-        if (fgHwnd == IntPtr.Zero) return "";
+    public static IntPtr GetFocusedHwnd(IntPtr fgHwnd) {
+        if (fgHwnd == IntPtr.Zero) return IntPtr.Zero;
         uint pid;
         uint tid = GetWindowThreadProcessId(fgHwnd, out pid);
         GUITHREADINFO info = new GUITHREADINFO();
         info.cbSize = Marshal.SizeOf(info);
-        if (GetGUIThreadInfo(tid, ref info) && info.hwndFocus != IntPtr.Zero) {
-            return GetWndClass(info.hwndFocus);
+        if (GetGUIThreadInfo(tid, ref info)) {
+            return info.hwndFocus;
         }
-        return "";
+        return IntPtr.Zero;
+    }
+
+    public static string GetFocusedControlClass(IntPtr fgHwnd) {
+        IntPtr f = GetFocusedHwnd(fgHwnd);
+        return f != IntPtr.Zero ? GetWndClass(f) : "";
     }
 
     public static bool IsKeyDown(int vKey) {
@@ -106,9 +153,8 @@ function Get-DesktopSelectedFiles {
     return ($res | Select-Object -Unique)
 }
 
-function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
-    # Windows 11 tabs share one HWND. Prefer the tab whose folder name matches the window title
-    # (= the active tab). Never look at any other Explorer window.
+function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle, [IntPtr]$focusedHwnd) {
+    # Query tabs belonging to this Explorer window
     $tabs = @()
     try {
         foreach ($win in $shell.Windows()) {
@@ -123,14 +169,40 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
     if ($tabs.Count -eq 1) {
         $active = $tabs[0]
     } else {
-        foreach ($t in $tabs) {
-            try {
-                $loc = [string]$t.LocationName
-                if ($loc -and $fgTitle -and $fgTitle.StartsWith($loc)) { $active = $t; break }
-            } catch {}
+        # 1. Match active tab via focused control ancestry (Windows 11 multi-tab Explorer)
+        if ($focusedHwnd -ne [IntPtr]::Zero) {
+            foreach ($t in $tabs) {
+                $tabHwnd = [Win32Watcher]::GetTabHwnd($t)
+                if ($tabHwnd -ne [IntPtr]::Zero -and ([Win32Watcher]::IsChild($tabHwnd, $focusedHwnd) -or $tabHwnd -eq $focusedHwnd)) {
+                    $active = $t
+                    break
+                }
+            }
         }
-        # Can't tell which tab is active -> safest is to do nothing
-        if ($null -eq $active) { return @() }
+
+        # 2. Match active tab via window visibility (inactive tabs are hidden)
+        if ($null -eq $active) {
+            foreach ($t in $tabs) {
+                $tabHwnd = [Win32Watcher]::GetTabHwnd($t)
+                if ($tabHwnd -ne [IntPtr]::Zero -and [Win32Watcher]::IsWindowVisible($tabHwnd)) {
+                    $active = $t
+                    break
+                }
+            }
+        }
+
+        # 3. Match active tab via LocationName and window title
+        if ($null -eq $active) {
+            foreach ($t in $tabs) {
+                try {
+                    $loc = [string]$t.LocationName
+                    if ($loc -and $fgTitle -and $fgTitle.StartsWith($loc)) { $active = $t; break }
+                } catch {}
+            }
+        }
+
+        # 4. Fallback to tab 0
+        if ($null -eq $active) { $active = $tabs[0] }
     }
 
     $res = @()
@@ -142,13 +214,13 @@ function Get-ExplorerSelectedFilesByHwnd([int64]$hwndInt, [string]$fgTitle) {
     return ($res | Select-Object -Unique)
 }
 
-function Get-BestSelectedFiles([IntPtr]$fgHwnd, [string]$fgClass, [string]$fgTitle) {
-    # STRICT: only the foreground window counts. No fallback to other windows.
+function Get-BestSelectedFiles([IntPtr]$fgHwnd, [string]$fgClass, [string]$fgTitle, [IntPtr]$focusedHwnd) {
+    # STRICT: only the foreground window counts.
     if ($fgClass -eq "Progman" -or $fgClass -eq "WorkerW") {
         return @(Get-DesktopSelectedFiles)
     }
     if ($fgClass -eq "CabinetWClass" -or $fgClass -eq "ExploreWClass") {
-        return @(Get-ExplorerSelectedFilesByHwnd ($fgHwnd.ToInt64()) $fgTitle)
+        return @(Get-ExplorerSelectedFilesByHwnd ($fgHwnd.ToInt64()) $fgTitle $focusedHwnd)
     }
     return @()
 }
@@ -197,7 +269,9 @@ while ($true) {
         $hoverRoot  = [Win32Watcher]::GetAncestor($hoverChild, 2)
         $hoverClass = [Win32Watcher]::GetWndClass($hoverRoot)
 
-        $focusedCtrl = [Win32Watcher]::GetFocusedControlClass($fgHwnd)
+        $focusedHwnd = [Win32Watcher]::GetFocusedHwnd($fgHwnd)
+        $focusedCtrl = [Win32Watcher]::GetWndClass($focusedHwnd)
+
         $mode = if ($shiftDown) { "conversions" } elseif ($altDown) { "tools" } else { "actions" }
         $keyName = if ($shiftDown) { "Shift" } elseif ($altDown) { "Alt" } else { "Ctrl" }
 
@@ -208,7 +282,7 @@ while ($true) {
 
         # Never trigger in other apps, or while renaming / typing in the address/search box
         if ($isExplorerOrDesktop -and -not $isMainDashboardFocused -and ($focusedCtrl -notmatch "Edit")) {
-            $files = @(Get-BestSelectedFiles $fgHwnd $fgClass $fgTitle)
+            $files = @(Get-BestSelectedFiles $fgHwnd $fgClass $fgTitle $focusedHwnd)
             if ($files.Count -gt 0) {
                 Emit-Json @{
                     type       = "keydown"

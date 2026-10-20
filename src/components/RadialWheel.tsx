@@ -33,6 +33,27 @@ export interface SubMenuState {
   halfH: number;
 }
 
+export interface DownloadFormat {
+  id: string;
+  label: string;
+  ext: string;
+  badge: string;
+  desc?: string;
+  isVideo?: boolean;
+  isAudio?: boolean;
+  isWebpage?: boolean;
+  quality?: string;
+}
+
+export interface DetectedLinkMeta {
+  title: string;
+  author?: string;
+  thumbnail?: string;
+  type: string;
+  category: string;
+  formats: DownloadFormat[];
+}
+
 // Exact mathematical proportions from the Reel's radial fan wheel
 const M = {
   inner: 48 * 0.8 * 1.1 + 8 * 0.8,      // 48.64
@@ -486,6 +507,120 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
   // Custom KB input for Exact-KB Compressor
   const [customKbVal, setCustomKbVal] = useState<string>('45');
 
+  // Link Downloader State
+  const [urlInput, setUrlInput] = useState<string>('');
+  const [isDetecting, setIsDetecting] = useState<boolean>(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [linkMeta, setLinkMeta] = useState<DetectedLinkMeta | null>(null);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; statusText: string }>({
+    percent: 0,
+    statusText: '',
+  });
+  const [downloadResult, setDownloadResult] = useState<{
+    success: boolean;
+    filePath?: string;
+    message?: string;
+  } | null>(null);
+
+  const handlePaste = async () => {
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      let text = await api?.readClipboard?.();
+      if (!text && navigator.clipboard) {
+        text = await navigator.clipboard.readText();
+      }
+      if (text && typeof text === 'string') {
+        const clean = text.trim();
+        setUrlInput(clean);
+        setDetectError(null);
+        if (/^https?:\/\//i.test(clean)) {
+          handleDetect(clean);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Clipboard paste error:', err);
+    }
+  };
+
+  const handleDetect = async (overrideUrl?: string) => {
+    const url = (overrideUrl || urlInput).trim();
+    if (!url) return;
+    setIsDetecting(true);
+    setDetectError(null);
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const res = await api?.detectLink?.(url);
+      if (res && res.success && res.meta) {
+        setLinkMeta(res.meta);
+        soundEngine.playPetalTick(0, 1);
+      } else {
+        setDetectError(res?.message || 'Could not analyze URL. Please check the link.');
+      }
+    } catch (err: any) {
+      setDetectError(err?.message || 'Detection failed');
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const handleStartDownload = async (fmt: DownloadFormat) => {
+    if (!linkMeta || !urlInput.trim()) return;
+    setIsDownloading(true);
+    setDownloadProgress({ percent: 5, statusText: 'Initializing download...' });
+    setDownloadResult(null);
+
+    const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+    const unsub = api?.onLinkProgress?.((data: { percent?: number; statusText?: string }) => {
+      setDownloadProgress({
+        percent: typeof data.percent === 'number' ? data.percent : 0,
+        statusText: data.statusText || 'Downloading...',
+      });
+    });
+
+    try {
+      const res = await api?.downloadLink?.({
+        url: urlInput.trim(),
+        formatId: fmt.id,
+        ext: fmt.ext,
+        isVideo: fmt.isVideo,
+        isAudio: fmt.isAudio,
+        isWebpage: fmt.isWebpage,
+      });
+      unsub?.();
+      if (res && res.success) {
+        soundEngine.playDropConfirm();
+        setDownloadResult({
+          success: true,
+          filePath: res.filePath,
+          message: res.message || 'Saved successfully',
+        });
+      } else {
+        setDownloadResult({
+          success: false,
+          message: res?.message || 'Download failed',
+        });
+      }
+    } catch (err: any) {
+      unsub?.();
+      setDownloadResult({
+        success: false,
+        message: err?.message || 'Download error',
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleResetLink = () => {
+    setUrlInput('');
+    setLinkMeta(null);
+    setDownloadResult(null);
+    setDetectError(null);
+    setIsDownloading(false);
+    setDownloadProgress({ percent: 0, statusText: '' });
+  };
+
   const effectiveIdx = selectedIndex;
   const activeItem = effectiveIdx !== null ? safeItems[effectiveIdx] : safeItems[0] || null;
 
@@ -551,11 +686,11 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
       return;
     }
     const el = subCardRef.current;
-    const fallbackH = activeItem?.id === 'trimVideo' ? 150 : activeItem?.id === 'exactKb' ? 112 : 96;
-    const w = el?.offsetWidth || 158;
+    const fallbackH = activeItem?.id === 'downloadLink' ? 240 : activeItem?.id === 'trimVideo' ? 150 : activeItem?.id === 'exactKb' ? 112 : 96;
+    const fallbackW = activeItem?.id === 'downloadLink' ? 220 : 158;
+    const w = el?.offsetWidth || fallbackW;
     const h = el?.offsetHeight || fallbackH;
-    // +8px padding so the cursor can sit on the card edge safely
-    onSubMenuStateChange({ locked: false, halfW: w / 2 + 8, halfH: h / 2 + 8 });
+    onSubMenuStateChange({ locked: true, halfW: w / 2 + 12, halfH: h / 2 + 12 });
   }, [hasSubOptions, activeItem?.id, onSubMenuStateChange]);
 
   useEffect(() => () => onSubMenuStateChange?.(null), [onSubMenuStateChange]);
@@ -602,8 +737,8 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
               key={item.id + idx}
               className="cursor-pointer"
               onPointerEnter={() => {
-                // Only block while the pointer is actually on the centered sub-options card
-                if (hoveringSubMenu) return;
+                // If sub-options card is open, never switch petals on hover
+                if (hasSubOptions || hoveringSubMenu) return;
                 if (selectedIndex !== idx) {
                   soundEngine.playPetalTick(idx, total);
                   onSelectIndex(idx);

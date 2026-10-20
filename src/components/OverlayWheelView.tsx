@@ -163,9 +163,8 @@ export const OverlayWheelView: React.FC = () => {
         setBusyText(null);
         setDoneText(null);
         setQrModal(null);
-        if (ev.files && ev.files.length > 0) {
-          setFiles(ev.files);
-        }
+        // Always reset files to current event files to prevent carrying over stale files
+        setFiles(Array.isArray(ev.files) ? ev.files : []);
         const nextMode = ev.mode || 'conversions';
         setMode(nextMode);
         setHoveredIdx(null);
@@ -192,10 +191,10 @@ export const OverlayWheelView: React.FC = () => {
         if (dist > 20) {
           pointerMovedRef.current = true;
         }
-        // Sub-options card is open: never switch petals while it's locked or while the
-        // cursor is over the card (it covers the inner part of the neighbouring petals).
+        // Sub-options card is open (e.g. LINK DL, Trim, Exact KB):
+        // Lock the active petal completely so cursor navigation into the center card never switches petals!
         const sub = subMenuRef.current;
-        if (sub && (sub.locked || (Math.abs(dx) <= sub.halfW && Math.abs(dy) <= sub.halfH))) {
+        if (sub) {
           return;
         }
         // Only update hoveredIdx when cursor is inside the petal ring (47..124px)!
@@ -215,6 +214,11 @@ export const OverlayWheelView: React.FC = () => {
         const dx = ev.dipX - centerDipRef.current.x;
         const dy = ev.dipY - centerDipRef.current.y;
         const dist = Math.hypot(dx, dy);
+        // Don't close if clicking inside the center sub-options card
+        const sub = subMenuRef.current;
+        if (sub && Math.abs(dx) <= sub.halfW && Math.abs(dy) <= sub.halfH) {
+          return;
+        }
         // Only close overlay when clicking outside the wheel & mode bar
         if (dist > 220 && !qrModal) {
           hideOverlayNow();
@@ -223,6 +227,7 @@ export const OverlayWheelView: React.FC = () => {
       }
 
       if (ev.type === 'keyrelease' || ev.type === 'mouseup') {
+        if (subMenuRef.current) return;
         const elapsed = performance.now() - showTimestampRef.current;
         if (
           elapsed > 110 &&
