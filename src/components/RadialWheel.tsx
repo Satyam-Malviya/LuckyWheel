@@ -526,15 +526,18 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
   const handlePaste = async () => {
     try {
       const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
-      let text = await api?.readClipboard?.();
-      if (!text && navigator.clipboard) {
-        text = await navigator.clipboard.readText();
+      const raw: any = await api?.readClipboard?.();
+      let str = typeof raw === 'string' ? raw : raw?.text;
+      if (!str && navigator.clipboard) {
+        try {
+          str = await navigator.clipboard.readText();
+        } catch {}
       }
-      if (text && typeof text === 'string') {
-        const clean = text.trim();
-        setUrlInput(clean);
-        setDetectError(null);
-        if (/^https?:\/\//i.test(clean)) {
+      if (str && typeof str === 'string') {
+        const clean = str.trim();
+        if (clean) {
+          setUrlInput(clean);
+          setDetectError(null);
           handleDetect(clean);
         }
       }
@@ -551,8 +554,9 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
     try {
       const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
       const res = await api?.detectLink?.(url);
-      if (res && res.success && res.meta) {
-        setLinkMeta(res.meta);
+      const meta = res?.meta || (res?.formats ? res : null);
+      if (res && (res.success || meta) && meta?.formats?.length) {
+        setLinkMeta(meta);
         soundEngine.playPetalTick(0, 1);
       } else {
         setDetectError(res?.message || 'Could not analyze URL. Please check the link.');
@@ -581,8 +585,12 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
     try {
       const res = await api?.downloadLink?.({
         url: urlInput.trim(),
+        type: linkMeta.type,
+        format: fmt.id,
         formatId: fmt.id,
         ext: fmt.ext,
+        title: linkMeta.title,
+        author: linkMeta.author,
         isVideo: fmt.isVideo,
         isAudio: fmt.isAudio,
         isWebpage: fmt.isWebpage,
@@ -989,7 +997,10 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={handlePaste}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePaste();
+                        }}
                         className="absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-white border border-black/10 hover:border-[#ff5200] text-[8.5px] font-bold text-[#5d655f] hover:text-[#ff5200] flex items-center gap-0.5 shadow-2xs transition-colors"
                         title="Paste from clipboard"
                       >

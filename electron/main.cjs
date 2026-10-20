@@ -713,14 +713,19 @@ async function captureWebpageDirect({ url, format, outputDir, title }) {
 
 ipcMain.handle('link:detect', async (_e, url) => {
   try {
-    return await detectUrl(url);
+    const res = await detectUrl(url);
+    return {
+      ...res,
+      meta: res,
+    };
   } catch (err) {
     return { success: false, message: err.message || 'Detection failed' };
   }
 });
 
 ipcMain.handle('link:download', async (_e, payload) => {
-  const { url, type, format, outputDir, title, author } = payload || {};
+  const { url, type, outputDir, title, author } = payload || {};
+  const format = payload?.format || payload?.formatId || payload?.ext || 'mp4-best';
   let resolvedDir =
     outputDir && fs.existsSync(outputDir)
       ? fs.statSync(outputDir).isDirectory()
