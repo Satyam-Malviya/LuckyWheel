@@ -242,6 +242,108 @@ export const MotionGraphicPreview: React.FC<MotionGraphicPreviewProps> = ({
       )}
 
       {/* 11. FOLDER ORGANIZE / ARCHIVE / BULK RENAME / WIFI QR */}
+            {/* 5. LINK DOWNLOADER MOTION GRAPHIC */}
+      {type === 'link-download' && (
+        <div className="flex flex-col items-center gap-3 w-full max-w-[280px] px-4">
+          <div className="w-full flex items-center justify-between px-3 py-1.5 rounded-full bg-white border border-[#dadfd6] shadow-sm">
+            <div className="flex items-center gap-2 truncate">
+              <span className="w-2 h-2 rounded-full bg-[#ff5200] animate-pulse" />
+              <motion.span
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 2.2, repeat: Infinity }}
+                className="text-[11px] font-medium text-[#282b29] truncate"
+              >
+                https://youtube.com/watch?v=...
+              </motion.span>
+            </div>
+            <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#ff5200] text-white shrink-0">
+              PASTE
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <motion.span
+              animate={{ y: [0, 4, 0] }}
+              transition={{ duration: 1.4, repeat: Infinity }}
+              className="text-xs text-[#ff5200] font-bold"
+            >
+              ↓ 8 Turbo Streams (50 MB/s)
+            </motion.span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <motion.div
+              animate={{ scale: [0.95, 1.05, 0.95] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0 }}
+              className="flex flex-col items-center px-2 py-1 rounded-lg bg-white border border-[#eceeed] shadow-2xs"
+            >
+              <span className="text-[10px] font-bold text-[#e11d48]">MP4 1080p</span>
+              <span className="text-[8px] text-[#8a959b]">Video</span>
+            </motion.div>
+            <motion.div
+              animate={{ scale: [0.95, 1.05, 0.95] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+              className="flex flex-col items-center px-2 py-1 rounded-lg bg-white border border-[#eceeed] shadow-2xs"
+            >
+              <span className="text-[10px] font-bold text-[#16a34a]">MP3 320k</span>
+              <span className="text-[8px] text-[#8a959b]">Audio</span>
+            </motion.div>
+            <motion.div
+              animate={{ scale: [0.95, 1.05, 0.95] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
+              className="flex flex-col items-center px-2 py-1 rounded-lg bg-white border border-[#eceeed] shadow-2xs"
+            >
+              <span className="text-[10px] font-bold text-[#2563eb]">PDF Doc</span>
+              <span className="text-[8px] text-[#8a959b]">Webpage</span>
+            </motion.div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. SCREEN CAPTURE & SNIP STUDIO MOTION GRAPHIC */}
+      {type === 'screen-capture' && (
+        <div className="flex flex-col items-center gap-2.5 w-full max-w-[280px] px-4">
+          <div className="relative w-[180px] h-[105px] bg-[#1e2329] rounded-lg p-2 shadow-md overflow-hidden border border-black/10">
+            <div className="w-full h-full flex flex-col justify-between opacity-30">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded bg-white/40" />
+                <div className="w-16 h-2 rounded bg-white/30" />
+              </div>
+              <div className="w-24 h-12 rounded bg-white/20" />
+            </div>
+
+            <motion.div
+              animate={{
+                top: ['20%', '15%', '20%'],
+                left: ['25%', '20%', '25%'],
+                width: ['55%', '65%', '55%'],
+                height: ['55%', '65%', '55%'],
+              }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              className="absolute border-2 border-dashed border-[#ff5200] bg-[#ff5200]/15 rounded flex items-center justify-center"
+            >
+              <span className="text-[8px] font-mono text-white bg-[#ff5200] px-1 py-0.2 rounded shadow-2xs">
+                Alt + S
+              </span>
+            </motion.div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded bg-white border border-[#dadfd6] text-[8.5px] font-bold text-[#282b29]">
+              PNG / JPG / PDF
+            </span>
+            <span className="text-[9px] text-[#767d78]">→</span>
+            <motion.div
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+              className="px-1.5 py-0.5 rounded-full bg-[#ecfdf5] border border-[#a7f3d0] text-[8.5px] font-bold text-[#059669] flex items-center gap-1"
+            >
+              <span>Multi-Save ✓</span>
+            </motion.div>
+          </div>
+        </div>
+      )}
+
       {(type === 'folder-organize' ||
         type === 'bulk-rename' ||
         type === 'wifi-qr' ||

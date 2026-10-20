@@ -289,6 +289,13 @@ function downloadWithYtDlp({ query, format, outputDir }, onProgress = () => {}) 
       '--windows-filenames',
       '--progress',
       '--newline',
+      '-N',
+      '8', // 8 concurrent chunk download streams for super speed
+      '--concurrent-fragments',
+      '8',
+      '--buffer-size',
+      '64K',
+      '--no-mtime',
       '-o',
       outTemplate,
     ];
@@ -298,13 +305,13 @@ function downloadWithYtDlp({ query, format, outputDir }, onProgress = () => {}) 
     }
 
     if (format === 'mp3') {
-      args.push('-x', '--audio-format', 'mp3', '--audio-quality', '0', '--embed-thumbnail');
+      args.push('-f', 'bestaudio/ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', '0', '--embed-thumbnail');
     } else if (format === 'wav') {
-      args.push('-x', '--audio-format', 'wav');
+      args.push('-f', 'bestaudio/ba/b', '-x', '--audio-format', 'wav');
     } else if (format === 'm4a') {
-      args.push('-x', '--audio-format', 'm4a');
+      args.push('-f', 'bestaudio/ba/b', '-x', '--audio-format', 'm4a');
     } else if (format === 'flac') {
-      args.push('-x', '--audio-format', 'flac');
+      args.push('-f', 'bestaudio/ba/b', '-x', '--audio-format', 'flac');
     } else if (format === 'mp4-720') {
       args.push(
         '-f',

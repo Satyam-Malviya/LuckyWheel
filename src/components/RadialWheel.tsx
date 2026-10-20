@@ -463,6 +463,20 @@ function getDetailedEnglishExplanation(item: WheelPetalItem, mode: WheelMode): {
         'Opens File Explorer / Finder and highlights the exact file location on disk.',
       motionType: 'folder-organize',
     },
+    downloadLink: {
+      title: 'Universal Download from Link',
+      tag: 'YouTube, Spotify, Web & Media',
+      explanation:
+        'Paste any YouTube video, Spotify track, video clip, or article link to download high-speed MP4, 320k MP3, WAV, or 300 DPI PDF in 1 click.',
+      motionType: 'link-download',
+    },
+    screenCapture: {
+      title: 'Screen Capture & Snip Studio',
+      tag: 'Alt + S · Multi-Location Auto-Save',
+      explanation:
+        'Capture box region, active window, or full screen. Select format (PNG, JPG, WEBP, PDF) and save to multiple folders at once.',
+      motionType: 'screen-capture',
+    },
   };
 
   const found = toolMap[id];
@@ -629,6 +643,119 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
     setDownloadProgress({ percent: 0, statusText: '' });
   };
 
+  // Screen Capture & Snip Studio State
+  const [ssStep, setSsStep] = useState<'idle' | 'captured' | 'saved'>('idle');
+  const [isCapturing, setIsCapturing] = useState<boolean>(false);
+  const [ssCaptureError, setSsCaptureError] = useState<string | null>(null);
+  const [ssCaptured, setSsCaptured] = useState<{
+    filePath: string;
+    width: number;
+    height: number;
+    previewDataUrl?: string;
+  } | null>(null);
+  const [ssFormat, setSsFormat] = useState<'png' | 'jpg' | 'webp' | 'pdf' | 'clipboard'>('png');
+  const [ssDestinations, setSsDestinations] = useState<string[]>([]);
+  const [systemDirs, setSystemDirs] = useState<{
+    desktop: string;
+    downloads: string;
+    pictures: string;
+    documents: string;
+  }>({
+    desktop: '',
+    downloads: '',
+    pictures: '',
+    documents: '',
+  });
+  const [customDir, setCustomDir] = useState<string | null>(null);
+  const [isSavingSs, setIsSavingSs] = useState<boolean>(false);
+  const [ssResult, setSsResult] = useState<{
+    success: boolean;
+    message?: string;
+    savedPaths?: string[];
+  } | null>(null);
+
+  useEffect(() => {
+    const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+    api?.getSystemDirectories?.().then((dirs: any) => {
+      if (dirs) {
+        setSystemDirs(dirs);
+        const defs: string[] = [];
+        if (dirs.desktop) defs.push(dirs.desktop);
+        if (dirs.pictures && !defs.includes(dirs.pictures)) defs.push(dirs.pictures);
+        setSsDestinations(defs);
+      }
+    });
+  }, []);
+
+  const handleCapture = async (mode: 'screen' | 'window' | 'region' = 'screen', delayMs = 0) => {
+    setIsCapturing(true);
+    setSsCaptureError(null);
+    setSsResult(null);
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const res = await api?.captureScreen?.({ mode, delayMs });
+      if (res && res.success && res.filePath) {
+        setSsCaptured(res);
+        setSsStep('captured');
+        soundEngine.playPetalTick(0, 1);
+      } else {
+        setSsCaptureError(res?.message || 'Screenshot capture failed');
+      }
+    } catch (err: any) {
+      setSsCaptureError(err?.message || 'Screenshot error');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleSaveScreenshot = async (formatOverride?: 'png' | 'jpg' | 'webp' | 'pdf' | 'clipboard') => {
+    if (!ssCaptured?.filePath) return;
+    const fmt = formatOverride || ssFormat;
+    setIsSavingSs(true);
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const dests = [...ssDestinations];
+      if (customDir && !dests.includes(customDir)) dests.push(customDir);
+      const res = await api?.saveScreenshot?.({
+        sourcePath: ssCaptured.filePath,
+        format: fmt,
+        destinations: fmt === 'clipboard' ? [] : dests,
+      });
+      if (res && res.success) {
+        soundEngine.playDropConfirm();
+        setSsResult(res);
+        setSsStep('saved');
+      } else {
+        setSsCaptureError(res?.message || 'Save failed');
+      }
+    } catch (err: any) {
+      setSsCaptureError(err?.message || 'Failed to save screenshot');
+    } finally {
+      setIsSavingSs(false);
+    }
+  };
+
+  const handlePickCustomDir = async () => {
+    try {
+      const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+      const picked = await api?.pickDirectory?.();
+      if (picked) {
+        setCustomDir(picked);
+        if (!ssDestinations.includes(picked)) {
+          setSsDestinations((prev) => [...prev, picked]);
+        }
+      }
+    } catch (e) {
+      console.warn('Pick directory error:', e);
+    }
+  };
+
+  const toggleDestination = (dirPath: string) => {
+    setSsDestinations((prev) =>
+      prev.includes(dirPath) ? prev.filter((d) => d !== dirPath) : [...prev, dirPath]
+    );
+  };
+
   const effectiveIdx = selectedIndex;
   const activeItem = effectiveIdx !== null ? safeItems[effectiveIdx] : safeItems[0] || null;
 
@@ -681,7 +808,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
     effectiveIdx !== null &&
     effectiveIdx !== dismissedIdx &&
     activeItem &&
-    (activeItem.presets || activeItem.id === 'trimVideo' || activeItem.id === 'downloadLink')
+    (activeItem.presets || activeItem.id === 'trimVideo' || activeItem.id === 'downloadLink' || activeItem.id === 'screenCapture')
   );
 
   // Measure the centered sub-options card and tell the parent, so cursor hit-testing
@@ -694,8 +821,8 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
       return;
     }
     const el = subCardRef.current;
-    const fallbackH = activeItem?.id === 'downloadLink' ? 240 : activeItem?.id === 'trimVideo' ? 150 : activeItem?.id === 'exactKb' ? 112 : 96;
-    const fallbackW = activeItem?.id === 'downloadLink' ? 220 : 158;
+    const fallbackH = activeItem?.id === 'downloadLink' ? 240 : activeItem?.id === 'screenCapture' ? 270 : activeItem?.id === 'trimVideo' ? 150 : activeItem?.id === 'exactKb' ? 112 : 96;
+    const fallbackW = activeItem?.id === 'downloadLink' || activeItem?.id === 'screenCapture' ? 224 : 158;
     const w = el?.offsetWidth || fallbackW;
     const h = el?.offsetHeight || fallbackH;
     onSubMenuStateChange({ locked: true, halfW: w / 2 + 12, halfH: h / 2 + 12 });
@@ -818,7 +945,7 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
             onPointerEnter={() => setHoveringSubMenu(true)}
             onPointerLeave={() => setHoveringSubMenu(false)}
             onClick={(e) => e.stopPropagation()}
-            className={`pointer-events-auto rounded-[22px] ${activeItem.id === 'downloadLink' ? 'w-[218px]' : 'w-[158px]'} bg-white backdrop-blur-2xl border border-black/15 p-2.5 shadow-[0_12px_32px_rgba(24,32,36,0.22)] flex flex-col items-center gap-1.5`}
+            className={`pointer-events-auto rounded-[22px] ${(activeItem.id === 'downloadLink' || activeItem.id === 'screenCapture') ? 'w-[224px]' : 'w-[158px]'} bg-white backdrop-blur-2xl border border-black/15 p-2.5 shadow-[0_12px_32px_rgba(24,32,36,0.22)] flex flex-col items-center gap-1.5`}
           >
             <div className="w-full flex items-center justify-between gap-1 px-0.5">
               <button
@@ -838,7 +965,230 @@ export const RadialWheel: React.FC<RadialWheelProps> = ({
             </div>
 
             {/* Special Start / End Time inputs for Trim Video / Audio */}
-            {activeItem.id === 'downloadLink' ? (
+            {activeItem.id === 'screenCapture' ? (
+              <div className="w-full space-y-2">
+                {isCapturing ? (
+                  <div className="w-full py-4 px-1 flex flex-col items-center gap-2">
+                    <Icons.Loader2 className="w-5 h-5 animate-spin text-[#ff5200]" />
+                    <span className="text-[10px] font-bold text-[#1e211f]">Capturing Display...</span>
+                    <span className="text-[8.5px] text-[#767d78]">Hiding wheel & taking pixel-perfect snip</span>
+                  </div>
+                ) : ssStep === 'saved' ? (
+                  <div className="w-full py-1.5 px-0.5 flex flex-col items-center gap-2 text-center">
+                    <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                      <Icons.Check className="w-4 h-4" strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold text-emerald-700">Screenshot Saved!</div>
+                      <div className="text-[8.5px] text-[#5d655f] truncate max-w-[190px] mt-0.5 font-medium">
+                        {ssResult?.message || 'Saved to selected locations & clipboard'}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 w-full mt-1">
+                      {ssResult?.savedPaths && ssResult.savedPaths[0] && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+                            api?.revealInExplorer?.(ssResult.savedPaths[0]);
+                          }}
+                          className="py-1 px-1.5 rounded-lg bg-[#ff5200] text-white text-[9.5px] font-semibold hover:bg-[#e04800] transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Icons.FolderOpen className="w-3 h-3" />
+                          Show Folder
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSsStep('idle');
+                          setSsCaptured(null);
+                          setSsResult(null);
+                        }}
+                        className={`py-1 px-1.5 rounded-lg bg-[#f4f5f4] text-[#282b29] text-[9.5px] font-semibold hover:bg-black/10 transition-colors flex items-center justify-center gap-1 ${
+                          !ssResult?.savedPaths?.length ? 'col-span-2' : ''
+                        }`}
+                      >
+                        <Icons.Camera className="w-3 h-3" />
+                        New Snip
+                      </button>
+                    </div>
+                  </div>
+                ) : ssStep === 'captured' && ssCaptured ? (
+                  <div className="w-full space-y-2">
+                    {/* Thumbnail preview */}
+                    <div className="relative w-full h-[64px] bg-black/5 rounded-xl overflow-hidden border border-black/10 flex items-center justify-center">
+                      {ssCaptured.previewDataUrl ? (
+                        <img
+                          src={ssCaptured.previewDataUrl}
+                          alt="Screenshot preview"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Icons.Image className="w-5 h-5 text-black/30" />
+                      )}
+                      <span className="absolute bottom-1 right-1 px-1 py-0.2 rounded bg-black/70 text-white text-[7.5px] font-mono">
+                        {ssCaptured.width}×{ssCaptured.height}
+                      </span>
+                    </div>
+
+                    {/* Step 2: Format Selector */}
+                    <div className="space-y-1">
+                      <div className="text-[8.5px] font-bold text-[#5d655f] uppercase tracking-wider flex items-center justify-between">
+                        <span>Format:</span>
+                        <span className="text-[#ff5200] lowercase font-semibold">.{ssFormat}</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {(['png', 'jpg', 'webp', 'pdf'] as const).map((fmt) => (
+                          <button
+                            key={fmt}
+                            type="button"
+                            onClick={() => setSsFormat(fmt)}
+                            className={`py-1 rounded-md text-[8.5px] font-bold transition-all uppercase ${
+                              ssFormat === fmt
+                                ? 'bg-[#ff5200] text-white shadow-2xs'
+                                : 'bg-[#f4f5f4] text-[#5d655f] hover:bg-black/10'
+                            }`}
+                          >
+                            {fmt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Step 3: Multi-Location Destinations */}
+                    <div className="space-y-1">
+                      <div className="text-[8.5px] font-bold text-[#5d655f] uppercase tracking-wider flex items-center justify-between">
+                        <span>Save Locations:</span>
+                        <button
+                          type="button"
+                          onClick={handlePickCustomDir}
+                          className="text-[8px] text-[#ff5200] hover:underline font-bold"
+                        >
+                          + Custom
+                        </button>
+                      </div>
+                      <div className="space-y-0.5 max-h-[64px] overflow-y-auto pr-0.5">
+                        {[
+                          { label: 'Desktop', path: systemDirs.desktop },
+                          { label: 'Downloads', path: systemDirs.downloads },
+                          { label: 'Screenshots', path: systemDirs.pictures },
+                          ...(customDir ? [{ label: customDir.split(/[\\/]/).pop() || 'Custom', path: customDir }] : []),
+                        ]
+                          .filter((d) => Boolean(d.path))
+                          .map((d) => {
+                            const isChecked = ssDestinations.includes(d.path);
+                            return (
+                              <button
+                                key={d.path}
+                                type="button"
+                                onClick={() => toggleDestination(d.path)}
+                                className={`w-full flex items-center justify-between px-1.5 py-0.5 rounded text-[8.5px] font-medium transition-colors ${
+                                  isChecked
+                                    ? 'bg-[#ff5200]/10 text-[#ff5200] font-semibold'
+                                    : 'bg-[#f7f8f7] text-[#5d655f] hover:bg-black/5'
+                                }`}
+                              >
+                                <span className="truncate">{d.label}</span>
+                                <span className="text-[9px] font-bold">{isChecked ? '✓' : '○'}</span>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
+
+                    {/* Save or Copy Buttons */}
+                    <div className="grid grid-cols-2 gap-1 pt-0.5">
+                      <button
+                        type="button"
+                        disabled={isSavingSs || (!ssDestinations.length && ssFormat !== 'clipboard')}
+                        onClick={() => handleSaveScreenshot()}
+                        className="py-1 px-2 rounded-lg bg-[#ff5200] text-white text-[9.5px] font-bold hover:bg-[#e04800] disabled:opacity-40 transition-all flex items-center justify-center gap-1 shadow-2xs"
+                      >
+                        {isSavingSs ? (
+                          <Icons.Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Icons.Save className="w-3 h-3" />
+                        )}
+                        <span>Save ({ssDestinations.length})</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingSs}
+                        onClick={() => handleSaveScreenshot('clipboard')}
+                        className="py-1 px-2 rounded-lg bg-[#f4f5f4] text-[#282b29] text-[9.5px] font-bold hover:bg-black/10 transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Icons.Clipboard className="w-3 h-3" />
+                        <span>Clipboard</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSsStep('idle');
+                        setSsCaptured(null);
+                      }}
+                      className="w-full text-center text-[8.5px] text-[#767d78] hover:text-[#ff5200] pt-0.5"
+                    >
+                      ← Retake Snip
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full space-y-1.5">
+                    <div className="text-[9px] text-[#767d78] text-center font-medium">
+                      Select Capture Mode <span className="text-[#ff5200] font-bold">(Alt+S)</span>
+                    </div>
+                    {ssCaptureError && (
+                      <div className="text-[8px] text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded text-center font-medium">
+                        {ssCaptureError}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCapture('screen')}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] transition-all group shadow-2xs"
+                      >
+                        <Icons.Monitor className="w-4 h-4 mb-1 text-[#ff5200] group-hover:text-white" />
+                        <span className="text-[9.5px] font-bold">Full Screen</span>
+                        <span className="text-[7.5px] text-[#767d78] group-hover:text-white/80">Entire display</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCapture('window')}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] transition-all group shadow-2xs"
+                      >
+                        <Icons.AppWindow className="w-4 h-4 mb-1 text-[#ff5200] group-hover:text-white" />
+                        <span className="text-[9.5px] font-bold">Active Window</span>
+                        <span className="text-[7.5px] text-[#767d78] group-hover:text-white/80">Current app</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCapture('screen')}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] transition-all group shadow-2xs"
+                      >
+                        <Icons.Crop className="w-4 h-4 mb-1 text-[#ff5200] group-hover:text-white" />
+                        <span className="text-[9.5px] font-bold">Area Snip</span>
+                        <span className="text-[7.5px] text-[#767d78] group-hover:text-white/80">Selection box</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCapture('screen', 3000)}
+                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#f4f5f4] hover:bg-[#ff5200] hover:text-white text-[#282b29] transition-all group shadow-2xs"
+                      >
+                        <Icons.Timer className="w-4 h-4 mb-1 text-[#ff5200] group-hover:text-white" />
+                        <span className="text-[9.5px] font-bold">3s Delay</span>
+                        <span className="text-[7.5px] text-[#767d78] group-hover:text-white/80">Timed grab</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : activeItem.id === 'downloadLink' ? (
               <div className="w-full space-y-2">
                 {isDownloading ? (
                   <div className="w-full py-2 px-1 flex flex-col items-center gap-2">

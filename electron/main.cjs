@@ -32,6 +32,7 @@ const http = require('http');
 const { exec, spawn } = require('child_process');
 const { processFiles, checkFfmpeg, generateWifiQrForFile } = require('./converter.cjs');
 const { detectUrl, downloadWithYtDlp, downloadDirectFile } = require('./downloader.cjs');
+const { captureScreen, saveScreenshot, getSystemDirectories } = require('./screenshot.cjs');
 
 // Ensure clean writable cache directory on Windows
 try {
@@ -531,6 +532,19 @@ app.whenReady().then(() => {
   } catch (e) {
     console.warn('Global shortcut registration warning:', e.message);
   }
+
+  // Register Global Hotkey: Alt+S for instant Screen Capture Studio
+  try {
+    globalShortcut.register('Alt+S', async () => {
+      const cursor = screen.getCursorScreenPoint();
+      showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false);
+      setTimeout(() => {
+        overlayWindow?.webContents.send('screenshot:trigger', { autoTrigger: true });
+      }, 60);
+    });
+  } catch (e) {
+    console.warn('Alt+S global shortcut registration warning:', e.message);
+  }
 });
 
 app.on('will-quit', () => {
@@ -769,4 +783,67 @@ ipcMain.handle('link:download', async (_e, payload) => {
     logDebug(`link:download error: ${err.message}`);
     return { success: false, message: err.message || 'Download failed' };
   }
+});
+
+// ==========================================
+// Native Screen Capture & Snip Studio IPC
+// ==========================================
+ipcMain.handle('screenshot:capture', async (_e, payload) => {
+  const { mode = 'screen', region = null, delayMs = 0 } = payload || {};
+  try {
+    const wasVisible = overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
+    if (wasVisible) {
+      overlayWindow.hide();
+      await new Promise((r) => setTimeout(r, Math.max(80, delayMs)));
+    } else if (delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+
+    const res = await captureScreen(mode, region);
+
+    if (wasVisible) {
+      const cursor = screen.getCursorScreenPoint();
+      showOverlayAtDipPoint(cursor.x, cursor.y, 'actions', [], false);
+    }
+
+    return res;
+  } catch (err) {
+    logDebug('screenshot:capture error: ' + err.message);
+    return { success: false, message: err.message || 'Capture failed' };
+  }
+});
+
+ipcMain.handle('screenshot:save', async (_e, payload) => {
+  try {
+    const res = await saveScreenshot(payload);
+    return res;
+  } catch (err) {
+    logDebug('screenshot:save error: ' + err.message);
+    return { success: false, message: err.message || 'Save failed' };
+  }
+});
+
+ipcMain.handle('system:directories', async () => {
+  try {
+    return getSystemDirectories();
+  } catch (err) {
+    return {
+      desktop: app.getPath('desktop'),
+      downloads: app.getPath('downloads'),
+      pictures: app.getPath('pictures'),
+      documents: app.getPath('documents'),
+    };
+  }
+});
+
+ipcMain.handle('dialog:pickDirectory', async () => {
+  const win = mainWindow && mainWindow.isVisible() ? mainWindow : overlayWindow;
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Select Destination Folder for Screenshots',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (res && !res.canceled && res.filePaths && res.filePaths.length > 0) {
+    return res.filePaths[0];
+  }
+  return null;
 });

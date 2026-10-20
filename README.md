@@ -1,127 +1,47 @@
-# 🎡 LuckyWheel — Zero-Click Radial File Converter & Pro Studio
+# 🎡 LuckyWheel — The Zero-Click Offline Radial File Converter & Pro Studio
 
-<div align="center">
+**LuckyWheel** is a minimalist, high-speed, 100% offline radial file converter and local power-utility studio for **Windows (10/11)** and **macOS**.
 
-[![Release](https://img.shields.io/github/v/release/Satyam-Malviya/LuckyWheel?style=for-the-badge&color=ff5200)](https://github.com/Satyam-Malviya/LuckyWheel/releases/tag/v1.0.0)
-[![Setup Installer](https://img.shields.io/badge/Download_Setup_.exe-Standard_Windows_Installer-blue?style=for-the-badge&logo=windows)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Setup-1.0.0.exe)
-[![Portable Exe](https://img.shields.io/badge/Download_Portable_.exe-Single--Click_Run-brightgreen?style=for-the-badge&logo=windows)](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)
-[![Platform](https://img.shields.io/badge/Platform-Windows_%7C_macOS-blue?style=for-the-badge)](https://github.com/Satyam-Malviya/LuckyWheel)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-
-<br/>
-
-**The zero-click, 100% offline radial file converter and local power-utility studio for Windows & macOS.**  
-*Inspired by Tangerine — completely offline, bundled FFmpeg & Sharp engines, zero cloud uploads, zero wait times.*
-
-<br/>
-
-<!-- Hyperframes Motion Graphics Animation -->
-<img src="./public/assets/luckywheel-motion.gif" width="760" alt="LuckyWheel Motion Graphics Showcase" style="border-radius: 16px; box-shadow: 0 12px 36px rgba(0,0,0,0.3);" />
-
-</div>
+Work directly inside **Windows File Explorer**, **macOS Finder**, or on your **Desktop** without opening any heavy software window or uploading files to the cloud:
+1. **Click / Select** any file (or multiple files) in File Explorer, Finder, or on your Desktop.
+2. Tap or hold **`⇧ Shift`** (Convert), **`⌥ Alt`** (30+ Pro Tools), or **`⌃ Ctrl`** (Quick Actions).
+3. The translucent **Frosted-Glass Radial Wheel** blooms right at your cursor in `<5ms`!
+4. **Hover for 0.5 seconds** on any petal to see a **Live Video / Motion Graphics Preview Card** with a clear English explanation of what that option does.
+5. Click or release to convert — your new file is saved **instantly right beside the original file**!
 
 ---
 
-## ⚡ 1-Click Fast Start (No Setup / No Node.js Required!)
+## ✨ Key Highlights
 
-> [!IMPORTANT]
-> **Everything is 100% bundled inside the `.exe`!**  
-> You do **NOT** need to install Node.js, Git, or FFmpeg, or run any terminal commands.  
-> Just download the installer or portable `.exe` and start converting immediately.
-
-### 📥 Download Options:
-
-| File | Type | Description | Download Link |
-| :--- | :--- | :--- | :--- |
-| **`LuckyWheel-Setup-1.0.0.exe`** | 🛠️ **Real Software Setup Installer** | Standard Windows installer: creates Desktop & Start Menu shortcuts, proper Uninstaller, runs automatically. | ⬇️ **[Download Setup Installer](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Setup-1.0.0.exe)** |
-| **`LuckyWheel-Portable.exe`** | 🚀 **Single-Click Portable Exe** | Zero-installation standalone `.exe`. Just double-click to run anywhere directly from USB or Downloads. | ⬇️ **[Download Portable .exe](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Portable.exe)** |
-| **`LuckyWheel-Windows-v1.0.0.zip`** | 📦 **Standalone Zip Archive** | Unpack into any folder and run `LuckyWheel.exe`. | ⬇️ **[Download Zip](https://github.com/Satyam-Malviya/LuckyWheel/releases/download/v1.0.0/LuckyWheel-Windows-v1.0.0.zip)** |
-
----
-
-### 🚀 How to Use in 3 Simple Steps:
-
-1. **Install or Run:**
-   - Double-click **`LuckyWheel-Setup-1.0.0.exe`** to install as a real desktop application, or double-click **`LuckyWheel-Portable.exe`**.
-   - LuckyWheel starts instantly and stays ready in your background System Tray (near your clock).
-
-2. **Select Any File in Explorer or Desktop:**
-   - Open **Windows File Explorer** or your **Desktop**.
-   - Click/Select any file (e.g., photo, video, PDF, audio).
-
-3. **Bloom the Wheel with 1 Key:**
-   - Press **`Shift`** — the **Radial Wheel blooms right at your mouse cursor** in `<5ms`!
-   - Press **`Alt`** — opens the **30+ Pro Local Tools** (Passport photo, Exam KB compressor, Video trim, Speed, Vocal splitter).
-   - Press **`Ctrl`** — opens **Quick Actions** (Wi-Fi QR transfer to phone, Copy path, Terminal).
-   - Click your desired format/tool — your converted file is saved **instantly in the exact same folder**!
-
-<div align="center">
-  <br/>
-  <img src="./public/assets/luckywheel-showcase.gif" width="680" alt="LuckyWheel In Action" style="border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);" />
-  <p><em>Radial wheel blooming at cursor over Windows File Explorer with live dwell video preview card.</em></p>
-</div>
-
----
-
-## 🎮 Master Controls & Shortcuts
-
-| Shortcut | What It Does |
+| Feature | Description |
 | :--- | :--- |
-| **Select file(s) + `⇧ Shift`** | Blooms the **Format Conversion Wheel** (Convert images, videos, audio, PDFs, docs) |
-| **Select file(s) + `⌥ Alt` / `Option`** | Blooms the **30+ Pro Tools Wheel** (Passport photo, Exam KB compressor, Video trim, Speed, Vocal splitter) |
-| **Press `⌃ Ctrl` while wheel is open** | Switches to the **Quick Actions Wheel** (Wi-Fi QR transfer to phone, Copy path, Terminal) |
-| **Hover any petal for `0.5s`** | Opens the floating **Dwell Video Preview Card** explaining the exact operation in English |
-| **`Alt + Space`** | Global hotkey to summon the LuckyWheel overlay anywhere on screen |
-| **`Esc` or Click Outside** | Closes the wheel immediately |
+| **Background Explorer / Finder Mode** | Runs silently in the System Tray / Menu Bar. Select any file on your Desktop or in File Explorer / Finder and press `⇧ Shift` or `⌥ Alt` — no dragging into a window required! |
+| **0.5s Hover Video Preview Card** | Pause your cursor on any wheel petal for `0.5s` to bloom a minimalist frosted-glass card with a live looping video / motion graphic preview + English description. |
+| **Center-Hub Locked Sub-Options** | Options with sub-controls (**Speed `0.5×–2.0×`**, **Trim `Start / End` sec**, **Exact-KB `20KB / 50KB / Custom`**, **Passport BG**) open directly inside the **Center Hub** so moving your cursor never accidentally selects adjacent petals. |
+| **275+ Format Conversions (`⇧ Shift`)** | Images (`JPG`, `PNG`, `WebP`, `AVIF`, `HEIC`, `TIFF`, `BMP`, `ICO`, `PDF`), Videos (`MP4`, `MOV`, `MKV`, `WebM`, `AVI`, `GIF`), Audio (`MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `Opus`), Documents & Data (`PDF`, `DOCX`, `TXT`, `MD`, `JSON`, `CSV`, `SRT`, `VTT`, `ZIP`). |
+| **30+ Everyday Pro Tools (`⌥ Alt`)** | **Exact-KB Exam Photo Compressor** (`20KB` / `50KB` / Custom KB), **Passport Photo Maker** (`3.5×4.5 cm @ 300 DPI`), **CamScanner B&W Document Filter**, **Lossless Video/Audio Start–End Trim**, **Pitch-Corrected Video Speed**, **Vocal & Instrumental Stem Splitter**, **PDF Merge / Split / Rotate / Unlock**, **EXIF & GPS Privacy Scrubber**. |
+| **Multi-File & Mixed Combos** | Select `1 Video + 1 Audio` to mux audio into video; `1 Audio + 1 Image` to render a 1080p podcast/YouTube MP4; `Multiple Images` to build a multi-page PDF or high-res Collage; or select a `Folder` to 1-Click Auto-Organize by category or scan SHA-256 duplicates. |
+| **Quick Actions (`⌃ Ctrl`)** | **Instant Wi-Fi QR Phone Transfer** (local LAN HTTP server + scannable QR code), **Floating Drop Shelf**, **Copy Full Path**, **Open in Terminal**, **Reveal in Explorer/Finder**. |
+| **Home Screen Plugin Hub** | Install 1-click power-up plugins or build your own custom CLI/Script radial petals directly from the Home Screen. |
 
 ---
 
-## 🌟 Core Features & Pro Tools
+## 🚀 How Anyone Can Run LuckyWheel (3 Easy Ways)
 
-### 1. 🎯 Center-Hub Sub-Options (Zero Mis-clicks)
-When selecting tools with sub-controls (like **Passport Background**, **Video Speed**, **Video Trim**, or **Exact KB Compressor**), the sub-options panel opens **dead-center inside the wheel hub**. Moving your mouse into the center card locks the tool and never accidentally triggers neighboring petals!
-- **Passport Photo Maker:** 1-click presets for `White BG`, `Studio Blue`, `Light Grey` @ 300 DPI passport crop.
-- **Exact-KB Exam Compressor:** 1-click compress to `20 KB`, `50 KB`, `100 KB`, or enter custom target size.
-- **Video & Audio Trimmer:** Enter start/end seconds or click quick buttons `0–5s`, `0–15s`, `0–30s`.
-- **Speed Control:** Pitch-corrected playback `0.5×`, `1.25×`, `1.5×`, `2.0×`.
-
-### 2. 📱 Phone Wi-Fi QR Share
-Need a file from your PC on your smartphone?
-1. Select the file and press **`Ctrl`** -> Click **Wi-Fi QR**.
-2. Scan the on-screen QR code with your iPhone or Android camera.
-3. The file downloads directly over your local Wi-Fi network at blazing gigabit speeds without cables or cloud uploads!
-
-### 3. 🔗 Universal Link & Media Downloader (YouTube, Spotify, Web)
-LuckyWheel now features a built-in **Link Downloader** right on the wheel!
-1. Press **`Alt+Space`** or **`Ctrl`** (Actions) and select **LINK DL**.
-2. Paste any link: **YouTube**, **Spotify**, **Instagram/TikTok/Twitter**, **Web Article**, or **Direct Download URL**.
-3. LuckyWheel instantly analyzes the link and provides one-click formats:
-   - **YouTube / Social Videos:** Download in `MP4 (1080p+)`, `MP4 (720p)`, `MP3 (320k)`, or `WAV (Lossless)`.
-   - **Spotify Music:** Downloads matching high-fidelity `MP3 (320k)`, `FLAC`, or `WAV` with embedded album art.
-   - **Webpages & Articles:** 1-click **Save as 300 DPI PDF**, **Full-Page PNG Screenshot**, or **Clean Text**.
-   - **Direct Media URLs:** Instant streaming download to your open Explorer directory or Downloads folder.
-4. Bundled with standalone **yt-dlp** & **FFmpeg** engines for 1000+ streaming sites without needing extra software.
-
-### 4. 🎨 275+ Supported Formats (100% Offline)
-- **Images:** `PNG`, `JPG`, `WebP`, `AVIF`, `HEIC`, `TIFF`, `BMP`, `ICO`, `SVG`
-- **Videos:** `MP4`, `MOV`, `MKV`, `WebM`, `AVI`, `GIF`
-- **Audio:** `MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `Opus`
-- **Documents:** `PDF`, `DOCX`, `TXT`, `MD`, `CSV`, `JSON`, `ZIP`
+### Option 1: Single-Run Portable `.exe` (Windows) or `.dmg` (macOS)
+No coding or terminal required:
+- **Windows:** Double-click **`release/LuckyWheel-Portable.exe`** (or **`Start-LuckyWheel-Windows.bat`**).
+- **macOS:** Open **`release/LuckyWheel-macOS.dmg`** (or double-click **`Start-LuckyWheel-Mac.command`**).
 
 ---
 
-## 🍎 macOS Setup (For Mac Users)
+### Option 2: Run From Source (Windows & macOS)
 
-1. Download or clone this repository to your Mac.
-2. Double-click **`Start-LuckyWheel-Mac.command`** (or run `chmod +x Start-LuckyWheel-Mac.command` once in Terminal).
-3. Select any file in **macOS Finder** or Desktop, tap **`Shift`** or **`Option`** to summon the wheel!
+#### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or newer)
+- [FFmpeg](https://ffmpeg.org/) installed on system `PATH` (for video/audio conversions, trimming, speed, and vocal splitting)
 
----
-
-## 🛠️ For Developers (Run From Source)
-
-If you want to edit the React / Electron source code:
-
+#### Quick Start (3 Commands)
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Satyam-Malviya/LuckyWheel.git
@@ -130,21 +50,135 @@ cd LuckyWheel
 # 2. Install dependencies
 npm install
 
-# 3. Build & Run
+# 3. Build & launch LuckyWheel
 npm run build
 npm start
 ```
 
-### 📦 Build Your Own Executables:
+Or simply double-click:
+- **Windows:** `Start-LuckyWheel-Windows.bat`
+- **macOS:** `Start-LuckyWheel-Mac.command` (run `chmod +x Start-LuckyWheel-Mac.command` once on macOS)
+
+---
+
+### Option 3: Build Standalone Single-File `.exe` (Windows) & `.dmg` (macOS)
+
+To generate redistributable single-file installers/executables in the `release/` folder:
+
 ```bash
-# Build both Windows Setup Installer and Portable .exe (outputs to release/)
+# Build Windows Single-Run Portable .exe (outputs release/LuckyWheel-Portable.exe)
 npm run dist:win
 
-# Build macOS .dmg / .zip
+# Build macOS .dmg and .zip (outputs release/LuckyWheel-macOS-*.dmg)
 npm run dist:mac
+
+# Build unpacked standalone app folder (outputs release/win-unpacked/LuckyWheel.exe)
+npm run pack
 ```
 
 ---
 
+
+---
+
+## 📥 Universal Download from Link (Turbo 8-Stream Engine)
+
+LuckyWheel includes an offline-first **Universal Link Downloader** directly integrated into the Radial Wheel (`LINK DL` petal in Control / Actions mode).
+
+Paste any link from the web — LuckyWheel automatically detects the content type in `<150ms` and offers customized formats:
+
+```
+   Paste Link (YouTube, Spotify, Web Article)
+                    │
+   Auto-Detection Engine (<150ms)
+                    │
+   ┌────────────────┼────────────────┐
+   ▼                ▼                ▼
+YouTube / Video   Spotify Track    Web Article / Page
+• 1080p MP4       • 320k MP3       • 300 DPI PDF Doc
+• 720p MP4        • Lossless WAV   • High-Res PNG
+• 320k MP3        • FLAC Audio     • Extracted Text
+• Lossless WAV    • M4A Audio
+```
+
+### ⚡ Supercharged Download Speed
+- **8 Parallel Streams (`-N 8`)**: Downloads large video files up to **10× faster** using concurrent fragment streaming.
+- **Direct Audio Extraction (`-f ba/b`)**: When downloading MP3, WAV, or Spotify tracks, LuckyWheel streams **only the 3–5 MB audio track directly**, completely avoiding downloading heavy 4K/1080p video files first. Downloads finish in seconds!
+- **Zero Cloud Upload**: Everything is remuxed and tagged locally using bundled high-efficiency FFmpeg.
+
+### Real-World Examples:
+1. **YouTube Music & Videos**:
+   - Paste `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+   - Select **MP4 (1080p Best)** for video, or **MP3 (320kbps)** for audio.
+   - File downloads directly with embedded album thumbnail and artist tags into your `Downloads` folder.
+2. **Spotify Tracks & Playlists**:
+   - Paste any Spotify track link (e.g. `https://open.spotify.com/track/...`)
+   - LuckyWheel automatically resolves the song title and artist and downloads the high-bitrate audio track in MP3, WAV, or FLAC.
+3. **Webpage Articles & Documentation**:
+   - Paste any article or documentation URL (e.g. `https://en.wikipedia.org/wiki/...`)
+   - Choose **PDF** to get a clean printable 300 DPI document, or **PNG** for a full high-resolution snapshot.
+
+---
+
+## 📸 Smart Screen Snip Studio (`Alt + S`)
+
+Capture your screen anywhere on Windows or macOS with zero lag, instant resolution, and fail-proof performance.
+
+Summon it anytime with **`Alt + S`** (free 2-key conflict-free global shortcut) or by tapping the **`SNIP / SS`** petal on the radial wheel.
+
+### 🎯 4 Instant Capture Modes:
+- **Area Snip (Selection Box)**: Drag a box on your screen to crop and save that exact rectangular region.
+- **Full Screen**: Captures the entire display in **under 30 milliseconds** using LuckyWheel's native C# GDI engine (`screencap.exe`).
+- **Active Window**: Captures the currently active window with crisp borders.
+- **3-Second Delay Timer**: 3-second countdown so you can open menus, right-click popups, or hover tooltips before the snip is taken.
+
+### 🔄 Dynamic 2-Step Format & Multi-Location Wheel Flow:
+1. **Step 1 — Format Selection**: Immediately after capture, the wheel presents format options:
+   - **`PNG`**: Pixel-perfect lossless image (recommended for UI and text).
+   - **`JPG`**: Lightweight compressed photo format.
+   - **`WEBP`**: Modern ultra-compact web image.
+   - **`PDF`**: Vector-fitted 300 DPI printable PDF document.
+   - **`CLIPBOARD`**: Instantly copies image to clipboard with zero disk clutter.
+2. **Step 2 — Multi-Location Auto-Save**:
+   - LuckyWheel lets you save to **one or multiple folders simultaneously** with one click:
+     - `Desktop`
+     - `Downloads`
+     - `Pictures / Screenshots`
+     - `+ Custom Folder` (choose any directory on your computer)
+   - Save to both your Desktop AND your project folder at the exact same moment!
+   - Includes a 1-click **"Show Folder"** button to reveal the file in Windows File Explorer immediately.
+
+## 🎮 Controls & Shortcuts Guide
+
+| Shortcut / Gesture | Action |
+| :--- | :--- |
+| **Select file(s) + `⇧ Shift`** | Opens the **Format Conversion Wheel** right at your cursor in File Explorer, Finder, or Desktop |
+| **Select file(s) + `⌥ Alt` / `Option`** | Opens the **30+ Pro Tools Wheel** (Exact-KB, Passport, Trim, Speed, Merge PDF, etc.) |
+| **Press `⌃ Ctrl` while wheel is open** | Switches to the **Quick Actions Wheel** (Wi-Fi QR Share, Copy Path, Open Terminal, Float Shelf) |
+| **Hover any petal for `0.5s`** | Opens the **Live Video / Motion Graphics Preview Card** with English explanation |
+| **Hold `Shift`/`Alt` → Point → Release** | Zero-click execution on release (for tools with sub-options like Speed/Trim, keeps Center Hub open) |
+| **`Alt + S`** | **Instant Screen Snip & Capture Studio** (Area snip, window, full-screen → PNG/JPG/WEBP/PDF to multi-folders) |
+| **`Alt + Space`** | Global hotkey to summon the LuckyWheel overlay anywhere on screen |
+| **`Esc` or Click Outside** | Closes the radial wheel overlay immediately |
+
+---
+
+## 📤 How to Upload This Project to GitHub
+
+Run these commands inside the project folder to push LuckyWheel to your GitHub repository:
+
+```bash
+git remote add origin https://github.com/Satyam-Malviya/LuckyWheel.git
+git branch -M main
+git push -u origin main
+```
+
+To share the single-run `.exe` with others on GitHub:
+1. Go to your GitHub repository → click **Releases** → **Draft a new release**.
+2. Upload `release/LuckyWheel-Portable.exe` (and macOS `.dmg` if built on a Mac).
+3. Anyone can download `LuckyWheel-Portable.exe` and run it directly with zero setup!
+
+---
+
 ## 📄 License
-MIT License — 100% Free, Offline, and Open Source. Created by [Satyam Malviya](https://github.com/Satyam-Malviya).
+MIT License — 100% Free & Open Source.

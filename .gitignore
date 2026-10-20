@@ -11,4 +11,6 @@ Thumbs.db
 .env.*
 *.zip
 README floatShelf*.md
-electron/bin/
+electron/bin/*
+!electron/bin/screencap.exe
+!electron/bin/ScreenCap.cs

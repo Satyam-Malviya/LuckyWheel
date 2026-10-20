@@ -76,11 +76,16 @@ export const OverlayWheelView: React.FC = () => {
       presetValue?: string | number,
       extraOptions?: Record<string, any>
     ) => {
-      if (isExecutingRef.current || !files.length) return;
+      if (isExecutingRef.current || (!files.length && item.id !== 'downloadLink' && item.id !== 'screenCapture')) return;
       isExecutingRef.current = true;
 
       const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
       const primary = files[0];
+
+      if (item.id === 'downloadLink' || item.id === 'screenCapture') {
+        isExecutingRef.current = false;
+        return;
+      }
 
       if (item.id === 'copyPath') {
         await api?.copyToClipboard?.(files.join('\n'));
@@ -236,9 +241,14 @@ export const OverlayWheelView: React.FC = () => {
           petals[hoveredIdx]
         ) {
           const targetPetal = petals[hoveredIdx];
-          // If the petal has sub-options (Speed, Trim, Exact KB, Passport, Rename, Link DL),
+          // If the petal has sub-options (Speed, Trim, Exact KB, Passport, Rename, Link DL, Screen Snip),
           // keep the wheel open on release so the user can choose their sub-option in the Center Hub!
-          if (targetPetal.presets || targetPetal.id === 'trimVideo' || targetPetal.id === 'downloadLink') {
+          if (
+            targetPetal.presets ||
+            targetPetal.id === 'trimVideo' ||
+            targetPetal.id === 'downloadLink' ||
+            targetPetal.id === 'screenCapture'
+          ) {
             return;
           }
           executePetal(targetPetal);
@@ -251,8 +261,18 @@ export const OverlayWheelView: React.FC = () => {
       }
     });
 
+    const unsubSs = api?.onScreenshotTrigger?.(() => {
+      setMode('actions');
+      const actionPetals = getWheelPetals(['folder'], 'actions', []);
+      const idx = actionPetals.findIndex((p) => p.id === 'screenCapture');
+      if (idx !== -1) {
+        setHoveredIdx(idx);
+      }
+    });
+
     return () => {
       unsub?.();
+      unsubSs?.();
     };
   }, [petals, hoveredIdx, qrModal, executePetal, hideOverlayNow]);
 

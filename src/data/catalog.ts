@@ -38,7 +38,9 @@ export interface FeatureCardItem {
     | 'wifi-qr'
     | 'bulk-rename'
     | 'collage-grid'
-    | 'metadata-scrub';
+    | 'metadata-scrub'
+    | 'link-download'
+    | 'screen-capture';
 }
 
 export interface PluginItem {
@@ -415,6 +417,14 @@ export const TOOLS_CATALOG: Record<string, WheelPetalItem> = {
     icon: 'CopyCheck',
     badge: 'FOLDER',
   },
+    screenCapture: {
+    id: 'screenCapture',
+    label: 'SNIP / SS',
+    fullName: 'Screen Capture & Snip Studio',
+    description: 'Instant area snip, active window, or full-screen capture. Save PNG/JPG/WEBP/PDF to multiple folders at once.',
+    icon: 'Camera',
+    badge: 'ALT+S',
+  },
   // Download from Link Tool
   downloadLink: {
     id: 'downloadLink',
@@ -725,6 +735,27 @@ export const INITIAL_PLUGINS: PluginItem[] = [
 
 // Feature Showcase Cards with Live Motion Graphics Video Previews
 export const FEATURE_SHOWCASE: FeatureCardItem[] = [
+  {
+    id: 'feat-link-dl',
+    toolId: 'downloadLink',
+    title: 'Universal Download from Link',
+    subtitle: 'Media & Web · YouTube, Spotify, Articles',
+    description: 'Paste any YouTube video, Spotify track, or article URL. Download high-speed MP4, 320k MP3, WAV, or 300 DPI PDF in 1 click.',
+    category: 'Online & Media',
+    badge: 'ONLINE DL',
+    motionType: 'link-download',
+  },
+  {
+    id: 'feat-screen-snip',
+    toolId: 'screenCapture',
+    title: 'Screen Capture & Snip Studio (Alt+S)',
+    subtitle: 'Display · Area Snip, Window, Fullscreen',
+    description: 'Instant screenshot capture with Alt+S. Export to PNG, JPG, WEBP, or PDF and save to multiple destination folders simultaneously.',
+    category: 'Screen & Capture',
+    badge: 'ALT+S',
+    motionType: 'screen-capture',
+  },
+
   {
     id: 'feat-exact-kb',
     toolId: 'exactKb',

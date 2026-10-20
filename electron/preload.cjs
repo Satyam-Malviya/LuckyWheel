@@ -41,6 +41,15 @@ contextBridge.exposeInMainWorld('orbitAPI', {
     ipcRenderer.on('wheel:globalTrigger', listener);
     return () => ipcRenderer.removeListener('wheel:globalTrigger', listener);
   },
+  captureScreen: (payload) => ipcRenderer.invoke('screenshot:capture', payload),
+  saveScreenshot: (payload) => ipcRenderer.invoke('screenshot:save', payload),
+  getSystemDirectories: () => ipcRenderer.invoke('system:directories'),
+  pickDirectory: () => ipcRenderer.invoke('dialog:pickDirectory'),
+  onScreenshotTrigger: (callback) => {
+    const listener = (_event, data) => callback(data);
+    ipcRenderer.on('screenshot:trigger', listener);
+    return () => ipcRenderer.removeListener('screenshot:trigger', listener);
+  },
   onOverlayEvent: (callback) => {
     const listener = (_event, data) => callback(data);
     ipcRenderer.on('overlay:event', listener);
