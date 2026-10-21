@@ -17,6 +17,7 @@ import {
   Sliders,
   Hand,
   Play,
+  Camera,
 } from 'lucide-react';
 import { soundEngine } from '../utils/sound';
 
@@ -61,8 +62,9 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   const [showScrollMenu, setShowScrollMenu] = useState(false);
   const [scrollDepth, setScrollDepth] = useState<number>(15); // 5, 15, 30, 50
   const [isManualScrollMode, setIsManualScrollMode] = useState(false);
+  const [isSectionSnapping, setIsSectionSnapping] = useState(false);
   const [manualFrames, setManualFrames] = useState<string[]>([]);
-  const manualTimerRef = useRef<any>(null);
+  const scrollDebounceRef = useRef<any>(null);
 
   // Drag selection state for Rectangular Snip
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
@@ -77,12 +79,12 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   };
 
   const handleClose = () => {
-    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     if (onClose) onClose();
     api?.closeSnipWindow?.();
   };
 
-  // Keyboard shortcut listener: ESC to cancel instantly
+  // Keyboard shortcut listener: ESC to cancel, Space to snap section in manual scroll mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -95,6 +97,10 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
         } else {
           handleClose();
         }
+      } else if (e.code === 'Space' && isManualScrollMode) {
+        e.preventDefault();
+        e.stopPropagation();
+        snapManualSection();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -237,12 +243,28 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
     }
   };
 
+  // Snap a single section cleanly (used on scroll pause or Space/button click)
+  const snapManualSection = async () => {
+    if (isSectionSnapping || isCapturing) return;
+    setIsSectionSnapping(true);
+    try {
+      const frame = await api?.captureScreen?.({ mode: 'window', delayMs: 40 });
+      if (frame && frame.success && frame.filePath) {
+        soundEngine.playPetalTick(4, 8);
+        setManualFrames((prev) => [...prev, frame.filePath]);
+      }
+    } catch {}
+    finally {
+      setIsSectionSnapping(false);
+    }
+  };
+
   // Manual Scroll Capture Mode ("User manual scroll kare")
   const startManualScrollMode = () => {
     setShowScrollMenu(false);
     setIsManualScrollMode(true);
     setManualFrames([]);
-    setStatusText('Scroll freely. Frames are being captured...');
+    setStatusText('Scroll freely. Snap sections as you scroll...');
 
     // Take initial snapshot
     api?.captureScreen?.({ mode: 'window', delayMs: 50 }).then((res: any) => {
@@ -250,24 +272,29 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
         setManualFrames([res.filePath]);
       }
     });
-
-    // Record frames periodically while user scrolls
-    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
-    manualTimerRef.current = setInterval(async () => {
-      try {
-        const frame = await api?.captureScreen?.({ mode: 'window', delayMs: 0 });
-        if (frame && frame.success && frame.filePath) {
-          setManualFrames((prev) => {
-            if (prev.length > 0 && prev[prev.length - 1] === frame.filePath) return prev;
-            return [...prev, frame.filePath];
-          });
-        }
-      } catch {}
-    }, 750);
   };
 
+  // Listen to wheel events on window during manual scroll mode:
+  // When scrolling stops (550ms debounce), automatically capture next section!
+  useEffect(() => {
+    if (!isManualScrollMode) return;
+
+    const handleWheel = () => {
+      if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+      scrollDebounceRef.current = setTimeout(() => {
+        snapManualSection();
+      }, 550);
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: true });
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    };
+  }, [isManualScrollMode]);
+
   const finishManualScroll = async () => {
-    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     setIsCapturing(true);
     setStatusText('Stitching all scrolled frames into full image...');
     try {
@@ -299,7 +326,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   };
 
   const cancelManualScroll = () => {
-    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     setIsManualScrollMode(false);
     setManualFrames([]);
   };
@@ -347,29 +374,46 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   // ==========================================
   if (isManualScrollMode) {
     return (
-      <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-xl border border-white/20 text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl px-5 py-3 flex items-center gap-3.5 z-[9999999] cursor-default select-none animate-fade-in">
-        <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
-        <div className="text-xs font-semibold">
-          <span>Manual Scroll Active: Scroll window freely...</span>
-          <span className="ml-2 font-mono text-amber-400 font-bold bg-white/10 px-2 py-0.5 rounded">
-            {manualFrames.length} {manualFrames.length === 1 ? 'frame' : 'frames'}
+      <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-[#1e211f]/95 backdrop-blur-2xl border border-white/20 text-white shadow-[0_20px_60px_rgba(0,0,0,0.6)] rounded-2xl px-5 py-3 flex items-center gap-3.5 z-[9999999] cursor-default select-none animate-fade-in">
+        <span className={`w-3 h-3 rounded-full ${isSectionSnapping ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`} />
+        <div className="text-xs font-semibold flex items-center gap-1.5">
+          <span>Manual Scroll: Scroll & pause, or Snap</span>
+          <span className="font-mono text-amber-300 font-bold bg-white/10 px-2 py-0.5 rounded">
+            {manualFrames.length} {manualFrames.length === 1 ? 'section' : 'sections'}
           </span>
         </div>
+
+        {/* Snap current section button */}
         <button
           type="button"
-          disabled={isCapturing}
+          disabled={isSectionSnapping || isCapturing}
+          onClick={snapManualSection}
+          className="px-3 py-1.5 bg-white/15 hover:bg-white/25 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10 shadow-xs"
+          title="Snap section now (or press Space)"
+        >
+          {isSectionSnapping ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" /> : <Camera className="w-3.5 h-3.5 text-amber-300" />}
+          <span>Snap (Space)</span>
+        </button>
+
+        {/* Finish & Stitch button */}
+        <button
+          type="button"
+          disabled={isCapturing || manualFrames.length < 1}
           onClick={finishManualScroll}
-          className="px-3.5 py-1.5 bg-[#ff5200] hover:bg-[#e04800] text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+          className="px-4 py-1.5 bg-[#ff5200] hover:bg-[#e04800] active:scale-95 text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
         >
           {isCapturing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           <span>Finish & Stitch</span>
         </button>
+
+        {/* Cancel button */}
         <button
           type="button"
           onClick={cancelManualScroll}
-          className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-all"
+          className="p-1.5 rounded-xl hover:bg-white/15 text-white/70 hover:text-white transition-colors"
+          title="Cancel (Esc)"
         >
-          Cancel (Esc)
+          <X className="w-4 h-4" />
         </button>
       </div>
     );

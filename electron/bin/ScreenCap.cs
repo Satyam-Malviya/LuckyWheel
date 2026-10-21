@@ -42,7 +42,6 @@ public class ScreenCap {
     }
 
     // Check if two bitmaps are nearly identical strictly in the center content area
-    // (ignores static ribbons, toolbars, sidebars, and status bars)
     private static bool AreBitmapsIdentical(Bitmap b1, Bitmap b2) {
         if (b1.Width != b2.Width || b1.Height != b2.Height) return false;
         int w = b1.Width;
@@ -68,35 +67,68 @@ public class ScreenCap {
                 if (diff < 15) matchCount++;
             }
         }
-        // Must match 96%+ of center content pixels to be declared bottom of document
         return matchCount >= (totalSamples - 2);
     }
 
-    // Find vertical offset overlap between previous frame and next frame
-    private static int FindVerticalOverlap(Bitmap b1, Bitmap b2) {
+    // Finds the exact vertical displacement deltaY (pixels scrolled down) between b1 and b2
+    // and determines the optimal seam row in b1 to eliminate duplicate lines and black border lines.
+    private static int FindVerticalDisplacement(Bitmap b1, Bitmap b2, out int bestSeamY) {
         int w = b1.Width;
         int h = b1.Height;
-        int sampleStripH = 32;
-        int startY1 = h - sampleStripH - 30;
-        if (startY1 < 0) return 0;
+        int topMargin = Math.Min(140, (int)(h * 0.15));
+        int bottomMargin = Math.Min(50, (int)(h * 0.06));
 
-        int minX = (int)(w * 0.25);
-        int maxX = (int)(w * 0.82);
+        int minX = (int)(w * 0.22);
+        int maxX = (int)(w * 0.78);
         if (maxX <= minX) {
             minX = 10;
             maxX = w - 10;
         }
 
+        int templateH = 48;
+        bestSeamY = h - bottomMargin - templateH - 20;
+
+        // Find an anchor strip in b1 with high texture/contrast (skip blank paragraphs or white gaps)
+        int bestAnchorY = -1;
+        long bestVariance = -1;
+
+        for (int testY = h - bottomMargin - templateH - 20; testY >= topMargin + 100; testY -= 16) {
+            long varSum = 0;
+            int lastGray = -1;
+            for (int x = minX; x < maxX; x += 12) {
+                for (int dy = 0; dy < templateH; dy += 8) {
+                    Color c = b1.GetPixel(x, testY + dy);
+                    int gray = (c.R + c.G + c.B) / 3;
+                    if (lastGray >= 0) varSum += Math.Abs(gray - lastGray);
+                    lastGray = gray;
+                }
+            }
+            if (varSum > bestVariance) {
+                bestVariance = varSum;
+                bestAnchorY = testY;
+            }
+            if (varSum > 3500) {
+                bestAnchorY = testY;
+                break;
+            }
+        }
+
+        if (bestAnchorY < 0) bestAnchorY = h - bottomMargin - templateH - 30;
+        bestSeamY = bestAnchorY + templateH / 2;
+
+        // Search for bestAnchorY in b2 (content must have moved upwards: topMargin <= y2 <= bestAnchorY - 15)
         int bestY2 = -1;
         long minDiff = long.MaxValue;
 
-        // Search in b2 between 0 and h - sampleStripH
-        for (int y2 = 0; y2 < h - sampleStripH; y2 += 2) {
+        int minY2 = topMargin;
+        int maxY2 = bestAnchorY - 15;
+
+        for (int y2 = minY2; y2 <= maxY2; y2++) {
             long diff = 0;
-            for (int sx = minX; sx < maxX; sx += 8) {
-                for (int dy = 0; dy < sampleStripH; dy += 4) {
-                    Color c1 = b1.GetPixel(sx, startY1 + dy);
-                    Color c2 = b2.GetPixel(sx, y2 + dy);
+            for (int x = minX; x < maxX; x += 8) {
+                for (int dy = 0; dy < templateH; dy += 4) {
+                    Color c1 = b1.GetPixel(x, bestAnchorY + dy);
+                    Color c2 = b2.GetPixel(x, y2 + dy);
                     diff += Math.Abs(c1.R - c2.R) + Math.Abs(c1.G - c2.G) + Math.Abs(c1.B - c2.B);
                 }
             }
@@ -106,15 +138,18 @@ public class ScreenCap {
             }
         }
 
-        // If high confidence match found
-        long threshold = (long)(sampleStripH * (maxX - minX) * 16);
-        if (bestY2 >= 0 && minDiff < threshold) {
-            int overlap = (startY1 + sampleStripH) - bestY2;
-            return Math.Max(0, Math.Min(h - 10, overlap));
+        int numSamples = ((maxX - minX) / 8) * (templateH / 4);
+        double avgDiff = numSamples > 0 ? (double)minDiff / (numSamples * 3) : 999;
+
+        if (bestY2 >= 0 && avgDiff < 20.0) {
+            int deltaY = bestAnchorY - bestY2;
+            if (deltaY >= 15 && deltaY < h - 40) {
+                return deltaY;
+            }
         }
 
-        // Fallback: estimate standard 3-tick scroll ~320px
-        return Math.Max(0, h - 320);
+        // Fallback: standard 3-tick scroll ~320px
+        return Math.Max(20, Math.Min(h - 100, 320));
     }
 
     private static int StitchFrames(List<Bitmap> frames, string outPath) {
@@ -127,32 +162,52 @@ public class ScreenCap {
             return 0;
         }
 
-        List<int> sliceOffsets = new List<int>();
-        sliceOffsets.Add(0);
+        List<int> seamYList = new List<int>();
+        List<int> deltaYList = new List<int>();
 
-        for (int i = 1; i < frames.Count; i++) {
-            int overlap = FindVerticalOverlap(frames[i - 1], frames[i]);
-            int newContentTop = Math.Max(10, Math.Min(frames[i].Height - 40, frames[i].Height - overlap));
-            sliceOffsets.Add(newContentTop);
+        for (int i = 0; i < frames.Count - 1; i++) {
+            int seamY;
+            int deltaY = FindVerticalDisplacement(frames[i], frames[i + 1], out seamY);
+            seamYList.Add(seamY);
+            deltaYList.Add(deltaY);
         }
 
-        int totalHeight = frames[0].Height;
+        // Calculate total canvas height
+        int totalHeight = seamYList[0];
         for (int i = 1; i < frames.Count; i++) {
-            totalHeight += (frames[i].Height - sliceOffsets[i]);
+            int prevSeam = seamYList[i - 1];
+            int prevDelta = deltaYList[i - 1];
+            int sliceTop = prevSeam - prevDelta;
+            int sliceBottom = (i < frames.Count - 1) ? seamYList[i] : frames[i].Height;
+            int sliceH = Math.Max(0, sliceBottom - sliceTop);
+            totalHeight += sliceH;
         }
 
-        Bitmap stitched = new Bitmap(w, totalHeight, PixelFormat.Format32bppArgb);
+        Bitmap stitched = new Bitmap(w, Math.Max(100, totalHeight), PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(stitched)) {
-            g.DrawImage(frames[0], 0, 0);
-            int currentY = frames[0].Height;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+            // Draw frame 0 from top 0 to seamYList[0]
+            Rectangle srcRect0 = new Rectangle(0, 0, w, seamYList[0]);
+            Rectangle destRect0 = new Rectangle(0, 0, w, seamYList[0]);
+            g.DrawImage(frames[0], destRect0, srcRect0, GraphicsUnit.Pixel);
+
+            int currentDestY = seamYList[0];
 
             for (int i = 1; i < frames.Count; i++) {
-                int sliceTop = sliceOffsets[i];
-                int sliceH = frames[i].Height - sliceTop;
-                Rectangle srcRect = new Rectangle(0, sliceTop, w, sliceH);
-                Rectangle destRect = new Rectangle(0, currentY, w, sliceH);
-                g.DrawImage(frames[i], destRect, srcRect, GraphicsUnit.Pixel);
-                currentY += sliceH;
+                int prevSeam = seamYList[i - 1];
+                int prevDelta = deltaYList[i - 1];
+                int sliceTop = Math.Max(0, prevSeam - prevDelta);
+                int sliceBottom = (i < frames.Count - 1) ? seamYList[i] : frames[i].Height;
+                int sliceH = Math.Max(0, sliceBottom - sliceTop);
+
+                if (sliceH > 0) {
+                    Rectangle srcRect = new Rectangle(0, sliceTop, w, sliceH);
+                    Rectangle destRect = new Rectangle(0, currentDestY, w, sliceH);
+                    g.DrawImage(frames[i], destRect, srcRect, GraphicsUnit.Pixel);
+                    currentDestY += sliceH;
+                }
             }
         }
 
@@ -214,7 +269,7 @@ public class ScreenCap {
                     Cursor.Position = new Point(x + w / 2, y + h / 2);
                 } catch {}
 
-                Thread.Sleep(100);
+                Thread.Sleep(120);
 
                 List<Bitmap> frames = new List<Bitmap>();
                 Bitmap initial = CaptureRect(x, y, w, h);
@@ -225,19 +280,17 @@ public class ScreenCap {
                 for (int s = 0; s < maxScrolls; s++) {
                     // Send 3 wheel ticks down
                     mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -360, 0);
-                    Thread.Sleep(160);
+                    Thread.Sleep(200);
 
                     Bitmap nextFrame = CaptureRect(x, y, w, h);
                     if (AreBitmapsIdentical(frames[frames.Count - 1], nextFrame)) {
                         consecutiveIdentical++;
                         nextFrame.Dispose();
-                        // Only break if verified twice at bottom of document
                         if (consecutiveIdentical >= 2) {
                             break;
                         }
-                        // Try one more larger scroll attempt before giving up
                         mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -480, 0);
-                        Thread.Sleep(180);
+                        Thread.Sleep(220);
                         continue;
                     }
 

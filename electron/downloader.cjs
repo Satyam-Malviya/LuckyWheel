@@ -326,11 +326,16 @@ async function downloadWithYtDlp({ query, format, outputDir }, onProgress = () =
       '--progress',
       '--newline',
       '-N',
-      '8', // 8 concurrent chunk download streams for super speed
+      '16', // 16 concurrent connection streams for maximum broadband saturation
       '--concurrent-fragments',
-      '8',
+      '16',
+      '--http-chunk-size',
+      '10M', // 10MB chunk prevents YouTube rate limiting / buffering lag
       '--buffer-size',
-      '64K',
+      '1024K', // 1MB buffer for blazing fast disk I/O
+      '--extractor-args',
+      'youtube:player_client=android,web', // Bypasses YouTube client throttling!
+      '--no-check-certificates',
       '--no-mtime',
       '-o',
       outTemplate,
