@@ -19,16 +19,14 @@ const currentDir = params.get('dir') || '';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {isSnip ? (
-      <div className="w-full min-h-screen flex items-center justify-center p-4 bg-transparent">
-        <ScreenSnipStudio
-          currentDir={currentDir}
-          isStandaloneWindow={true}
-          onClose={() => {
-            const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
-            api?.closeWindow?.();
-          }}
-        />
-      </div>
+      <ScreenSnipStudio
+        currentDir={currentDir}
+        isStandaloneWindow={true}
+        onClose={() => {
+          const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
+          api?.closeSnipWindow?.();
+        }}
+      />
     ) : isOverlay ? (
       <OverlayWheelView />
     ) : (

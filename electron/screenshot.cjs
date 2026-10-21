@@ -219,8 +219,30 @@ function getSystemDirectories() {
   };
 }
 
+function cropImage(sourcePath, { x, y, width, height }) {
+  const tempDir = app?.getPath?.('temp') || os.tmpdir();
+  const outPath = path.join(tempDir, `LuckyWheel_crop_${Date.now()}.png`);
+  const img = nativeImage.createFromPath(sourcePath);
+  const cropped = img.crop({
+    x: Math.max(0, Math.round(x)),
+    y: Math.max(0, Math.round(y)),
+    width: Math.max(10, Math.round(width)),
+    height: Math.max(10, Math.round(height)),
+  });
+  fs.writeFileSync(outPath, cropped.toPNG());
+  const sz = cropped.getSize();
+  return {
+    success: true,
+    filePath: outPath,
+    width: sz.width,
+    height: sz.height,
+    previewDataUrl: cropped.resize({ width: 360 }).toDataURL(),
+  };
+}
+
 module.exports = {
   captureScreen,
+  cropImage,
   saveScreenshot,
   getSystemDirectories,
 };

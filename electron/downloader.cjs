@@ -11,17 +11,52 @@ const execFileAsync = promisify(execFile);
  */
 function getYtDlpPath() {
   const candidates = [
+    process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'electron', 'bin', 'yt-dlp.exe') : null,
     process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'yt-dlp.exe') : null,
     process.resourcesPath ? path.join(process.resourcesPath, 'bin', 'yt-dlp') : null,
+    path.join(__dirname, 'bin', 'yt-dlp.exe').replace('app.asar', 'app.asar.unpacked'),
     path.join(__dirname, 'bin', 'yt-dlp.exe'),
     path.join(__dirname, 'bin', 'yt-dlp'),
     path.join(__dirname, '..', 'electron', 'bin', 'yt-dlp.exe'),
     path.join(__dirname, '..', 'bin', 'yt-dlp.exe'),
+    path.join(process.env.APPDATA || '', 'LuckyWheel', 'bin', 'yt-dlp.exe'),
   ];
 
   for (const c of candidates) {
     if (c && fs.existsSync(c)) return c;
   }
+  return 'yt-dlp';
+}
+
+async function ensureYtDlpAvailable(onProgress = () => {}) {
+  const p = getYtDlpPath();
+  if (p !== 'yt-dlp' && fs.existsSync(p)) return p;
+
+  const appDataTarget = path.join(process.env.APPDATA || '', 'LuckyWheel', 'bin', 'yt-dlp.exe');
+  if (fs.existsSync(appDataTarget)) return appDataTarget;
+
+  try {
+    onProgress(5, 'Downloading media engine (yt-dlp)...');
+    const targetDir = path.dirname(appDataTarget);
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(appDataTarget);
+      https.get('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return https.get(res.headers.location, (res2) => {
+            res2.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+          }).on('error', reject);
+        }
+        res.pipe(file);
+        file.on('finish', () => { file.close(); resolve(); });
+      }).on('error', reject);
+    });
+
+    if (fs.existsSync(appDataTarget)) return appDataTarget;
+  } catch {}
+
   return 'yt-dlp';
 }
 
@@ -274,10 +309,11 @@ async function detectUrl(rawUrl) {
 /**
  * Execute media download using yt-dlp + FFmpeg
  */
-function downloadWithYtDlp({ query, format, outputDir }, onProgress = () => {}) {
+async function downloadWithYtDlp({ query, format, outputDir }, onProgress = () => {}) {
+  const ytDlp = await ensureYtDlpAvailable(onProgress);
+  const ffmpeg = getFfmpegPath();
+
   return new Promise((resolve, reject) => {
-    const ytDlp = getYtDlpPath();
-    const ffmpeg = getFfmpegPath();
 
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });

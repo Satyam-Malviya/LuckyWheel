@@ -32,7 +32,7 @@ const http = require('http');
 const { exec, spawn } = require('child_process');
 const { processFiles, checkFfmpeg, generateWifiQrForFile } = require('./converter.cjs');
 const { detectUrl, downloadWithYtDlp, downloadDirectFile } = require('./downloader.cjs');
-const { captureScreen, saveScreenshot, getSystemDirectories } = require('./screenshot.cjs');
+const { captureScreen, cropImage, saveScreenshot, getSystemDirectories } = require('./screenshot.cjs');
 
 // Ensure clean writable cache directory on Windows
 try {
@@ -56,18 +56,20 @@ function showSnipStudioWindow() {
   }
 
   const primaryDisp = screen.getPrimaryDisplay();
-  const workArea = primaryDisp.workArea;
+  const bounds = primaryDisp.bounds;
 
   snipWindow = new BrowserWindow({
-    width: 640,
-    height: 560,
-    x: Math.round(workArea.x + (workArea.width - 640) / 2),
-    y: Math.round(workArea.y + (workArea.height - 560) / 2),
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     frame: false,
     transparent: true,
-    resizable: true,
     alwaysOnTop: true,
-    skipTaskbar: false,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    focusable: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -1008,6 +1010,18 @@ ipcMain.handle('screenshot:captureWebpage', async (_e, payload) => {
 
 ipcMain.on('snip:open', () => {
   showSnipStudioWindow();
+});
+
+ipcMain.on('snip:close', () => {
+  if (snipWindow && !snipWindow.isDestroyed()) {
+    snipWindow.close();
+    snipWindow = null;
+  }
+});
+
+ipcMain.handle('screenshot:crop', async (_e, payload) => {
+  const { sourcePath, rect } = payload || {};
+  return cropImage(sourcePath, rect);
 });
 
 ipcMain.handle('screenshot:save', async (_e, payload) => {
