@@ -14,13 +14,20 @@ if (isOverlay) {
   document.body.classList.add('overlay-mode');
 }
 
+if (isSnip) {
+  document.documentElement.classList.add('snip-mode');
+  document.body.classList.add('snip-mode');
+}
+
 const currentDir = params.get('dir') || '';
+const initialBg = params.get('bg') || '';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {isSnip ? (
       <ScreenSnipStudio
         currentDir={currentDir}
+        initialBgPath={initialBg}
         isStandaloneWindow={true}
         onClose={() => {
           const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;

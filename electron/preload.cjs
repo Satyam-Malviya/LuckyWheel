@@ -60,5 +60,6 @@ contextBridge.exposeInMainWorld('orbitAPI', {
   openSnipStudio: () => ipcRenderer.send('snip:open'),
   closeSnipWindow: () => ipcRenderer.send('snip:close'),
   cropScreenshot: (payload) => ipcRenderer.invoke('screenshot:crop', payload),
+  stitchScreenshots: (payload) => ipcRenderer.invoke('screenshot:stitch', payload),
   captureWebpageScroll: (payload) => ipcRenderer.invoke('screenshot:captureWebpage', payload),
 });

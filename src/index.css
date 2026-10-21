@@ -20,7 +20,9 @@
   }
 
   html.overlay-mode,
-  body.overlay-mode {
+  body.overlay-mode,
+  html.snip-mode,
+  body.snip-mode {
     background: transparent !important;
     background-color: transparent !important;
     overflow: hidden !important;

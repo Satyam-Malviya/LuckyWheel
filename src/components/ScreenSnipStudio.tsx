@@ -13,11 +13,16 @@ import {
   X,
   Loader2,
   Plus,
+  ChevronDown,
+  Sliders,
+  Hand,
+  Play,
 } from 'lucide-react';
 import { soundEngine } from '../utils/sound';
 
 export interface ScreenSnipStudioProps {
   currentDir?: string;
+  initialBgPath?: string;
   onClose?: () => void;
   isStandaloneWindow?: boolean;
 }
@@ -32,6 +37,7 @@ export interface CapturedSnip {
 
 export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   currentDir = '',
+  initialBgPath = '',
   onClose,
   isStandaloneWindow = false,
 }) => {
@@ -47,14 +53,31 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [delayTimer, setDelayTimer] = useState<number>(0);
 
+  // Desktop Frozen Snapshot for True Windows Snipping Tool UX
+  const [desktopBgUrl, setDesktopBgUrl] = useState<string>('');
+  const fullDesktopPathRef = useRef<string | null>(null);
+
+  // Long Screenshot Configuration & Modes
+  const [showScrollMenu, setShowScrollMenu] = useState(false);
+  const [scrollDepth, setScrollDepth] = useState<number>(15); // 5, 15, 30, 50
+  const [isManualScrollMode, setIsManualScrollMode] = useState(false);
+  const [manualFrames, setManualFrames] = useState<string[]>([]);
+  const manualTimerRef = useRef<any>(null);
+
   // Drag selection state for Rectangular Snip
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [dragCurrent, setDragCurrent] = useState<{ x: number; y: number } | null>(null);
-  const fullDesktopPathRef = useRef<string | null>(null);
 
   const api = (window as unknown as { orbitAPI?: Record<string, any> }).orbitAPI;
 
+  const formatFileUrl = (p: string) => {
+    if (!p) return '';
+    if (p.startsWith('file://')) return p;
+    return 'file:///' + p.replace(/\\/g, '/');
+  };
+
   const handleClose = () => {
+    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
     if (onClose) onClose();
     api?.closeSnipWindow?.();
   };
@@ -65,12 +88,18 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        handleClose();
+        if (isManualScrollMode) {
+          cancelManualScroll();
+        } else if (capturedSnip) {
+          handleClose();
+        } else {
+          handleClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isManualScrollMode, capturedSnip]);
 
   // Initialize destinations
   useEffect(() => {
@@ -83,41 +112,55 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
     }).catch(() => {});
   }, [currentDir]);
 
-  // Capture full screen background bitmap on load for instant rectangular cropping
+  // Load Initial Background Image or Capture Desktop Snapshot
   useEffect(() => {
     let isMounted = true;
-    const initSnapshot = async () => {
-      try {
-        const res = await api?.captureScreen?.({ mode: 'screen', delayMs: 40 });
-        if (isMounted && res && res.success && res.filePath) {
-          fullDesktopPathRef.current = res.filePath;
-        }
-      } catch {}
-    };
-    initSnapshot();
+    const searchParams = new URLSearchParams(window.location.search);
+    const bgParam = initialBgPath || searchParams.get('bg') || '';
+
+    if (bgParam) {
+      fullDesktopPathRef.current = bgParam;
+      setDesktopBgUrl(formatFileUrl(bgParam));
+    } else {
+      const initSnapshot = async () => {
+        try {
+          const res = await api?.captureScreen?.({ mode: 'screen', delayMs: 20 });
+          if (isMounted && res && res.success && res.filePath) {
+            fullDesktopPathRef.current = res.filePath;
+            setDesktopBgUrl(formatFileUrl(res.filePath));
+          }
+        } catch {}
+      };
+      initSnapshot();
+    }
+
     return () => { isMounted = false; };
-  }, []);
+  }, [initialBgPath]);
 
   // Perform Rectangular Crop
   const finishRectSnip = async (box: { x: number; y: number; w: number; h: number }) => {
-    if (box.w < 15 || box.h < 15) {
-      setDragStart(null);
-      setDragCurrent(null);
-      return;
-    }
+    if (box.w < 15 || box.h < 15) return;
     setIsCapturing(true);
     setStatusText('Cropping selection...');
     try {
+      const dpr = window.devicePixelRatio || 1;
+      const physicalRect = {
+        x: Math.round(box.x * dpr),
+        y: Math.round(box.y * dpr),
+        width: Math.round(box.w * dpr),
+        height: Math.round(box.h * dpr),
+      };
+
       let cropRes: any = null;
       if (fullDesktopPathRef.current && api?.cropScreenshot) {
         cropRes = await api.cropScreenshot({
           sourcePath: fullDesktopPathRef.current,
-          rect: { x: box.x, y: box.y, width: box.w, height: box.h },
+          rect: physicalRect,
         });
       } else {
         cropRes = await api?.captureScreen?.({
           mode: 'region',
-          region: { x: box.x, y: box.y, width: box.w, height: box.h },
+          region: physicalRect,
         });
       }
 
@@ -138,8 +181,6 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
     } finally {
       setIsCapturing(false);
       setStatusText('');
-      setDragStart(null);
-      setDragCurrent(null);
     }
   };
 
@@ -169,13 +210,14 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
     }
   };
 
-  // Perform Long Screenshot (Auto-Scrolling Current Window)
-  const handleScrollCapture = async () => {
+  // Perform Long Screenshot (Auto-Scrolling with configurable depth)
+  const handleAutoScrollCapture = async (depth: number) => {
+    setShowScrollMenu(false);
     setIsCapturing(true);
-    setStatusText('Auto-scrolling active window and stitching full page...');
+    setStatusText(`Auto-scrolling active window (${depth} scrolls)...`);
     setErrorMessage(null);
     try {
-      const res = await api?.captureScreen?.({ mode: 'scroll', delayMs: 80 });
+      const res = await api?.captureScreen?.({ mode: 'scroll', maxScrolls: depth, delayMs: 80 });
       if (res && res.success && res.filePath) {
         soundEngine.playDropConfirm();
         setCapturedSnip(res);
@@ -185,7 +227,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           destinations: [],
         });
       } else {
-        setErrorMessage(res?.message || 'Long scrolling screenshot failed. Ensure a scrollable window is active.');
+        setErrorMessage(res?.message || 'Long screenshot failed. Ensure a scrollable window is active.');
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Scrolling capture error');
@@ -193,6 +235,73 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
       setIsCapturing(false);
       setStatusText('');
     }
+  };
+
+  // Manual Scroll Capture Mode ("User manual scroll kare")
+  const startManualScrollMode = () => {
+    setShowScrollMenu(false);
+    setIsManualScrollMode(true);
+    setManualFrames([]);
+    setStatusText('Scroll freely. Frames are being captured...');
+
+    // Take initial snapshot
+    api?.captureScreen?.({ mode: 'window', delayMs: 50 }).then((res: any) => {
+      if (res && res.success && res.filePath) {
+        setManualFrames([res.filePath]);
+      }
+    });
+
+    // Record frames periodically while user scrolls
+    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    manualTimerRef.current = setInterval(async () => {
+      try {
+        const frame = await api?.captureScreen?.({ mode: 'window', delayMs: 0 });
+        if (frame && frame.success && frame.filePath) {
+          setManualFrames((prev) => {
+            if (prev.length > 0 && prev[prev.length - 1] === frame.filePath) return prev;
+            return [...prev, frame.filePath];
+          });
+        }
+      } catch {}
+    }, 750);
+  };
+
+  const finishManualScroll = async () => {
+    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    setIsCapturing(true);
+    setStatusText('Stitching all scrolled frames into full image...');
+    try {
+      if (manualFrames.length === 0) {
+        setIsManualScrollMode(false);
+        setIsCapturing(false);
+        return;
+      }
+      const res = await api?.stitchScreenshots?.({ framePaths: manualFrames });
+      if (res && res.success && res.filePath) {
+        soundEngine.playDropConfirm();
+        setCapturedSnip(res);
+        api?.saveScreenshot?.({
+          sourcePath: res.filePath,
+          format: 'clipboard',
+          destinations: [],
+        });
+      } else {
+        setErrorMessage(res?.message || 'Failed to stitch manual scroll frames.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Stitching error');
+    } finally {
+      setIsCapturing(false);
+      setIsManualScrollMode(false);
+      setManualFrames([]);
+      setStatusText('');
+    }
+  };
+
+  const cancelManualScroll = () => {
+    if (manualTimerRef.current) clearInterval(manualTimerRef.current);
+    setIsManualScrollMode(false);
+    setManualFrames([]);
   };
 
   // Save Snip to Destinations
@@ -234,11 +343,44 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   };
 
   // ==========================================
-  // VIEW: Captured Snip Result Card
+  // VIEW 1: Manual Scrolling Mode Floating Bar
+  // ==========================================
+  if (isManualScrollMode) {
+    return (
+      <div className="fixed top-5 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-xl border border-white/20 text-white shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl px-5 py-3 flex items-center gap-3.5 z-[9999999] cursor-default select-none animate-fade-in">
+        <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+        <div className="text-xs font-semibold">
+          <span>Manual Scroll Active: Scroll window freely...</span>
+          <span className="ml-2 font-mono text-amber-400 font-bold bg-white/10 px-2 py-0.5 rounded">
+            {manualFrames.length} {manualFrames.length === 1 ? 'frame' : 'frames'}
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={isCapturing}
+          onClick={finishManualScroll}
+          className="px-3.5 py-1.5 bg-[#ff5200] hover:bg-[#e04800] text-white rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+        >
+          {isCapturing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          <span>Finish & Stitch</span>
+        </button>
+        <button
+          type="button"
+          onClick={cancelManualScroll}
+          className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-all"
+        >
+          Cancel (Esc)
+        </button>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: Captured Snip Result Card
   // ==========================================
   if (capturedSnip) {
     return (
-      <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs select-none">
+      <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs select-none">
         <div className="w-full max-w-lg bg-white rounded-3xl border border-[#e2e6e2] shadow-2xl p-5 space-y-4 animate-fade-in text-[#282b29]">
           <div className="flex items-center justify-between border-b border-[#f0f2f0] pb-2.5">
             <div className="flex items-center gap-2">
@@ -274,7 +416,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           </div>
 
           {/* Preview Image */}
-          <div className="w-full h-44 rounded-2xl bg-[#f4f5f4] border border-black/10 flex items-center justify-center overflow-hidden p-2 relative">
+          <div className="w-full h-48 rounded-2xl bg-[#f4f5f4] border border-black/10 flex items-center justify-center overflow-hidden p-2 relative">
             {capturedSnip.previewDataUrl ? (
               <img
                 src={capturedSnip.previewDataUrl}
@@ -414,7 +556,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           )}
 
           {errorMessage && (
-            <div className="p-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+            <div className="p-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-medium">
               {errorMessage}
             </div>
           )}
@@ -424,7 +566,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
   }
 
   // ==========================================
-  // VIEW: Windows Snipping Tool (Win + Shift + S) Full-Screen Experience
+  // VIEW 3: True Windows Snipping Tool (Win + Shift + S) Full-Screen Experience
   // ==========================================
   const boxLeft = dragStart && dragCurrent ? Math.min(dragStart.x, dragCurrent.x) : 0;
   const boxTop = dragStart && dragCurrent ? Math.min(dragStart.y, dragCurrent.y) : 0;
@@ -433,37 +575,82 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[999999] cursor-crosshair select-none bg-black/25 overflow-hidden"
-      onMouseDown={(e) => {
-        // Prevent drag on toolbar clicks
-        if ((e.target as HTMLElement).closest('.snipping-toolbar')) return;
-        setDragStart({ x: e.clientX, y: e.clientY });
-        setDragCurrent({ x: e.clientX, y: e.clientY });
+      className="fixed inset-0 z-[999999] cursor-crosshair select-none overflow-hidden touch-none"
+      onContextMenu={(e) => {
+        // Right-click instantly cancels any ongoing drag
+        e.preventDefault();
+        setDragStart(null);
+        setDragCurrent(null);
       }}
-      onMouseMove={(e) => {
+      onPointerDown={(e) => {
+        if (isCapturing) return;
+        if ((e.target as HTMLElement).closest('.snipping-toolbar') || (e.target as HTMLElement).closest('.scroll-menu')) {
+          return;
+        }
+        if (e.button !== 0) return; // Only primary left click initiates snip
+        setShowScrollMenu(false);
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+        const clampedX = Math.max(0, Math.min(window.innerWidth, e.clientX));
+        const clampedY = Math.max(0, Math.min(window.innerHeight, e.clientY));
+        setDragStart({ x: clampedX, y: clampedY });
+        setDragCurrent({ x: clampedX, y: clampedY });
+      }}
+      onPointerMove={(e) => {
         if (dragStart) {
-          setDragCurrent({ x: e.clientX, y: e.clientY });
+          const clampedX = Math.max(0, Math.min(window.innerWidth, e.clientX));
+          const clampedY = Math.max(0, Math.min(window.innerHeight, e.clientY));
+          setDragCurrent({ x: clampedX, y: clampedY });
         }
       }}
-      onMouseUp={() => {
-        if (dragStart && dragCurrent && boxWidth > 15 && boxHeight > 15) {
-          finishRectSnip({ x: boxLeft, y: boxTop, w: boxWidth, h: boxHeight });
+      onPointerUp={(e) => {
+        if (dragStart && dragCurrent) {
+          try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+          const finalBox = {
+            x: boxLeft,
+            y: boxTop,
+            w: boxWidth,
+            h: boxHeight,
+          };
+          // Immediately reset drag state so selection rectangle NEVER stays stuck
+          setDragStart(null);
+          setDragCurrent(null);
+          if (finalBox.w > 15 && finalBox.h > 15) {
+            finishRectSnip(finalBox);
+          }
         } else {
           setDragStart(null);
           setDragCurrent(null);
         }
       }}
     >
+      {/* 0. Live Frozen Desktop Image (Ensures 100% clarity, zero gray screen!) */}
+      {desktopBgUrl ? (
+        <img
+          src={desktopBgUrl}
+          alt="Frozen Desktop Snapshot"
+          className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none z-0"
+          draggable={false}
+        />
+      ) : null}
+
+      {/* 0.5. Dimming Layer: When not dragging, uniform gentle dark tint */}
+      {!dragStart && (
+        <div className="absolute inset-0 bg-black/35 pointer-events-none z-[1]" />
+      )}
+
       {/* 1. Sleek Windows Snipping Tool Top Center Bar */}
       <div
         className="snipping-toolbar absolute top-5 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl border border-black/15 shadow-[0_16px_36px_rgba(0,0,0,0.22)] rounded-2xl p-1.5 flex items-center gap-1 z-[1000000] cursor-default"
-        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Tool 1: Rectangular Snip (Box Drag) */}
+        {/* Tool 1: Rectangular Snip (Default box drag) */}
         <button
           type="button"
-          onClick={() => setActiveTool('rect')}
+          onClick={() => {
+            setActiveTool('rect');
+            setShowScrollMenu(false);
+          }}
           className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
             activeTool === 'rect'
               ? 'bg-[#ff5200] text-white shadow-xs'
@@ -481,6 +668,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           disabled={isCapturing}
           onClick={() => {
             setActiveTool('window');
+            setShowScrollMenu(false);
             handleDirectCapture('window', delayTimer);
           }}
           className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -500,6 +688,7 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           disabled={isCapturing}
           onClick={() => {
             setActiveTool('screen');
+            setShowScrollMenu(false);
             handleDirectCapture('screen', delayTimer);
           }}
           className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -513,24 +702,83 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
           <span>Full Screen</span>
         </button>
 
-        {/* Tool 4: Long Screenshot (Auto-Scrolling Current Window) */}
-        <button
-          type="button"
-          disabled={isCapturing}
-          onClick={() => {
-            setActiveTool('scroll');
-            handleScrollCapture();
-          }}
-          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeTool === 'scroll'
-              ? 'bg-[#ff5200] text-white shadow-xs'
-              : 'text-[#282b29] hover:bg-black/5'
-          }`}
-          title="Auto-scroll active window and capture full page (No URL needed)"
-        >
-          <Scroll className="w-4 h-4 text-[#ff5200] group-hover:text-white" />
-          <span>Long Screenshot</span>
-        </button>
+        {/* Tool 4: Long Screenshot with Configurable Depth & Manual Scroll */}
+        <div className="relative">
+          <button
+            type="button"
+            disabled={isCapturing}
+            onClick={() => setShowScrollMenu((prev) => !prev)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTool === 'scroll' || showScrollMenu
+                ? 'bg-[#ff5200] text-white shadow-xs'
+                : 'text-[#282b29] hover:bg-black/5'
+            }`}
+            title="Auto-scroll active window or scroll manually"
+          >
+            <Scroll className="w-4 h-4" />
+            <span>Long Screenshot</span>
+            <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+          </button>
+
+          {/* Long Screenshot Menu Popover */}
+          {showScrollMenu && (
+            <div
+              className="scroll-menu absolute top-full mt-2 left-0 w-64 bg-white/98 backdrop-blur-xl border border-black/15 shadow-2xl rounded-2xl p-3 z-[1000001] space-y-2.5 text-[#282b29] animate-fade-in"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Option A: Auto-Scroll with Depth Options */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-bold text-[#5d655f] uppercase tracking-wider flex items-center gap-1">
+                  <Play className="w-3 h-3 text-[#ff5200]" />
+                  <span>Auto-Scroll Depth:</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { depth: 5, label: '5x (Short)' },
+                    { depth: 15, label: '15x (Standard)' },
+                    { depth: 30, label: '30x (Deep)' },
+                    { depth: 50, label: '50x (Full Page)' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.depth}
+                      type="button"
+                      onClick={() => {
+                        setScrollDepth(opt.depth);
+                        handleAutoScrollCapture(opt.depth);
+                      }}
+                      className={`p-1.5 rounded-lg border text-xs font-semibold transition-all text-left flex items-center justify-between ${
+                        scrollDepth === opt.depth
+                          ? 'border-[#ff5200] bg-orange-50 text-[#ff5200]'
+                          : 'border-[#e2e6e2] bg-[#f7f8f7] text-[#282b29] hover:border-black/20'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="w-full h-[1px] bg-black/10" />
+
+              {/* Option B: Manual Scroll (User scrolls themselves) */}
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={startManualScrollMode}
+                  className="w-full p-2 rounded-xl bg-[#282b29] hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs"
+                >
+                  <Hand className="w-4 h-4 text-[#ff5200]" />
+                  <span>Manual Scroll (Scroll Yourself)</span>
+                </button>
+                <p className="text-[9.5px] text-[#767d78] text-center leading-tight">
+                  Scroll window at your own pace, then click Finish & Stitch
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Divider */}
         <div className="w-[1px] h-5 bg-black/10 mx-1" />
@@ -569,26 +817,27 @@ export const ScreenSnipStudio: React.FC<ScreenSnipStudioProps> = ({
         </div>
       )}
 
-      {/* Live Rectangular Selection Box */}
+      {/* Live Rectangular Selection Cutout Box (100% bright inside, dimmed outside) */}
       {dragStart && dragCurrent && boxWidth > 2 && (
         <div
-          className="absolute border-2 border-[#ff5200] bg-transparent shadow-[0_0_0_99999px_rgba(0,0,0,0.40)] pointer-events-none rounded-xs"
+          className="absolute border-2 border-[#ff5200] bg-transparent pointer-events-none rounded-xs z-[10]"
           style={{
             left: `${boxLeft}px`,
             top: `${boxTop}px`,
             width: `${boxWidth}px`,
             height: `${boxHeight}px`,
+            boxShadow: '0 0 0 99999px rgba(0, 0, 0, 0.45)', // Cutout mask
           }}
         >
-          <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-[#ff5200] text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded shadow">
-            {Math.round(boxWidth)} × {Math.round(boxHeight)} px
+          <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 bg-[#ff5200] text-white text-[10px] font-mono font-bold px-2.5 py-0.5 rounded shadow whitespace-nowrap">
+            {Math.round(boxWidth * (window.devicePixelRatio || 1))} × {Math.round(boxHeight * (window.devicePixelRatio || 1))} px
           </div>
         </div>
       )}
 
       {/* Subtle Hint */}
       {!dragStart && !isCapturing && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xs text-white/90 text-xs px-3.5 py-1.5 rounded-full pointer-events-none">
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xs text-white/90 text-xs px-3.5 py-1.5 rounded-full pointer-events-none z-[5]">
           Click and drag to snip · Press <kbd className="font-mono bg-white/20 px-1 py-0.2 rounded font-bold">Esc</kbd> to cancel
         </div>
       )}

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -40,17 +41,26 @@ public class ScreenCap {
         return bmp;
     }
 
-    // Check if two bitmaps are nearly identical (meaning scroll reached bottom)
+    // Check if two bitmaps are nearly identical strictly in the center content area
+    // (ignores static ribbons, toolbars, sidebars, and status bars)
     private static bool AreBitmapsIdentical(Bitmap b1, Bitmap b2) {
         if (b1.Width != b2.Width || b1.Height != b2.Height) return false;
         int w = b1.Width;
         int h = b1.Height;
+
+        int minX = (int)(w * 0.25);
+        int maxX = (int)(w * 0.80);
+        int minY = (int)(h * 0.25);
+        int maxY = (int)(h * 0.80);
+
+        if (maxX <= minX || maxY <= minY) return false;
+
         int matchCount = 0;
-        int totalSamples = 40;
+        int totalSamples = 50;
 
         for (int i = 0; i < totalSamples; i++) {
-            int sx = (w * (i % 8 + 1)) / 10;
-            int sy = (h * (i / 8 + 1)) / 6;
+            int sx = minX + ((maxX - minX) * (i % 10 + 1)) / 11;
+            int sy = minY + ((maxY - minY) * (i / 10 + 1)) / 6;
             if (sx < w && sy < h) {
                 Color c1 = b1.GetPixel(sx, sy);
                 Color c2 = b2.GetPixel(sx, sy);
@@ -58,6 +68,7 @@ public class ScreenCap {
                 if (diff < 15) matchCount++;
             }
         }
+        // Must match 96%+ of center content pixels to be declared bottom of document
         return matchCount >= (totalSamples - 2);
     }
 
@@ -65,9 +76,16 @@ public class ScreenCap {
     private static int FindVerticalOverlap(Bitmap b1, Bitmap b2) {
         int w = b1.Width;
         int h = b1.Height;
-        int sampleStripH = 24;
-        int startY1 = h - sampleStripH - 10;
+        int sampleStripH = 32;
+        int startY1 = h - sampleStripH - 30;
         if (startY1 < 0) return 0;
+
+        int minX = (int)(w * 0.25);
+        int maxX = (int)(w * 0.82);
+        if (maxX <= minX) {
+            minX = 10;
+            maxX = w - 10;
+        }
 
         int bestY2 = -1;
         long minDiff = long.MaxValue;
@@ -75,7 +93,7 @@ public class ScreenCap {
         // Search in b2 between 0 and h - sampleStripH
         for (int y2 = 0; y2 < h - sampleStripH; y2 += 2) {
             long diff = 0;
-            for (int sx = 20; sx < w - 20; sx += 8) {
+            for (int sx = minX; sx < maxX; sx += 8) {
                 for (int dy = 0; dy < sampleStripH; dy += 4) {
                     Color c1 = b1.GetPixel(sx, startY1 + dy);
                     Color c2 = b2.GetPixel(sx, y2 + dy);
@@ -89,20 +107,66 @@ public class ScreenCap {
         }
 
         // If high confidence match found
-        if (bestY2 >= 0 && minDiff < (sampleStripH * w * 15)) {
+        long threshold = (long)(sampleStripH * (maxX - minX) * 16);
+        if (bestY2 >= 0 && minDiff < threshold) {
             int overlap = (startY1 + sampleStripH) - bestY2;
             return Math.Max(0, Math.Min(h - 10, overlap));
         }
 
-        // Fallback: estimate ~300px scroll per wheel burst
+        // Fallback: estimate standard 3-tick scroll ~320px
         return Math.Max(0, h - 320);
+    }
+
+    private static int StitchFrames(List<Bitmap> frames, string outPath) {
+        if (frames.Count == 0) return 1;
+        int w = frames[0].Width;
+
+        if (frames.Count == 1) {
+            frames[0].Save(outPath, ImageFormat.Png);
+            Console.WriteLine("SUCCESS:" + outPath + ":" + w + "x" + frames[0].Height);
+            return 0;
+        }
+
+        List<int> sliceOffsets = new List<int>();
+        sliceOffsets.Add(0);
+
+        for (int i = 1; i < frames.Count; i++) {
+            int overlap = FindVerticalOverlap(frames[i - 1], frames[i]);
+            int newContentTop = Math.Max(10, Math.Min(frames[i].Height - 40, frames[i].Height - overlap));
+            sliceOffsets.Add(newContentTop);
+        }
+
+        int totalHeight = frames[0].Height;
+        for (int i = 1; i < frames.Count; i++) {
+            totalHeight += (frames[i].Height - sliceOffsets[i]);
+        }
+
+        Bitmap stitched = new Bitmap(w, totalHeight, PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(stitched)) {
+            g.DrawImage(frames[0], 0, 0);
+            int currentY = frames[0].Height;
+
+            for (int i = 1; i < frames.Count; i++) {
+                int sliceTop = sliceOffsets[i];
+                int sliceH = frames[i].Height - sliceTop;
+                Rectangle srcRect = new Rectangle(0, sliceTop, w, sliceH);
+                Rectangle destRect = new Rectangle(0, currentY, w, sliceH);
+                g.DrawImage(frames[i], destRect, srcRect, GraphicsUnit.Pixel);
+                currentY += sliceH;
+            }
+        }
+
+        stitched.Save(outPath, ImageFormat.Png);
+        Console.WriteLine("SUCCESS:" + outPath + ":" + w + "x" + totalHeight);
+        stitched.Dispose();
+        return 0;
     }
 
     public static int Main(string[] args) {
         try { SetProcessDPIAware(); } catch {}
 
         if (args.Length < 2) {
-            Console.WriteLine("Usage: screencap.exe <screen|window|region|scroll> <outPath> [x] [y] [w] [h]");
+            Console.WriteLine("Usage: screencap.exe <screen|window|region|scroll|stitch> <outPath> [options...]");
             return 1;
         }
 
@@ -110,7 +174,27 @@ public class ScreenCap {
         string outPath = args[1];
 
         try {
+            if (mode == "stitch") {
+                List<Bitmap> frames = new List<Bitmap>();
+                for (int i = 2; i < args.Length; i++) {
+                    if (File.Exists(args[i])) {
+                        try {
+                            frames.Add(new Bitmap(args[i]));
+                        } catch {}
+                    }
+                }
+                int res = StitchFrames(frames, outPath);
+                foreach (Bitmap b in frames) b.Dispose();
+                return res;
+            }
+
             if (mode == "scroll" || mode == "long") {
+                int maxScrolls = 25;
+                if (args.Length >= 3) {
+                    int.TryParse(args[2], out maxScrolls);
+                }
+                if (maxScrolls <= 0) maxScrolls = 25;
+
                 IntPtr fg = GetForegroundWindow();
                 RECT r = new RECT();
                 int x = 0, y = 0, w = 0, h = 0;
@@ -124,69 +208,46 @@ public class ScreenCap {
                     x = b.X; y = b.Y; w = b.Width; h = b.Height;
                 }
 
-                // Focus window and move mouse inside for wheel scrolling
+                // Place cursor in center of window for wheel scrolling
                 try {
                     SetForegroundWindow(fg);
                     Cursor.Position = new Point(x + w / 2, y + h / 2);
                 } catch {}
 
-                Thread.Sleep(80);
+                Thread.Sleep(100);
 
                 List<Bitmap> frames = new List<Bitmap>();
-                List<int> sliceOffsets = new List<int>();
-
-                // Capture initial frame
                 Bitmap initial = CaptureRect(x, y, w, h);
                 frames.Add(initial);
-                sliceOffsets.Add(0);
 
-                int maxScrolls = 6;
+                int consecutiveIdentical = 0;
+
                 for (int s = 0; s < maxScrolls; s++) {
-                    // Send 3 mouse wheel scrolls down (-360)
+                    // Send 3 wheel ticks down
                     mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -360, 0);
-                    Thread.Sleep(140);
+                    Thread.Sleep(160);
 
                     Bitmap nextFrame = CaptureRect(x, y, w, h);
                     if (AreBitmapsIdentical(frames[frames.Count - 1], nextFrame)) {
-                        // Reached end of scroll
-                        break;
+                        consecutiveIdentical++;
+                        nextFrame.Dispose();
+                        // Only break if verified twice at bottom of document
+                        if (consecutiveIdentical >= 2) {
+                            break;
+                        }
+                        // Try one more larger scroll attempt before giving up
+                        mouse_event(MOUSEEVENTF_WHEEL, 0, 0, -480, 0);
+                        Thread.Sleep(180);
+                        continue;
                     }
 
-                    int overlap = FindVerticalOverlap(frames[frames.Count - 1], nextFrame);
-                    int newContentTop = Math.Max(10, Math.Min(h - 50, h - overlap));
-                    sliceOffsets.Add(newContentTop);
+                    consecutiveIdentical = 0;
                     frames.Add(nextFrame);
                 }
 
-                // Calculate total stitched height
-                int totalHeight = frames[0].Height;
-                for (int i = 1; i < frames.Count; i++) {
-                    totalHeight += (frames[i].Height - sliceOffsets[i]);
-                }
-
-                Bitmap stitched = new Bitmap(w, totalHeight, PixelFormat.Format32bppArgb);
-                using (Graphics g = Graphics.FromImage(stitched)) {
-                    // Draw first frame
-                    g.DrawImage(frames[0], 0, 0);
-                    int currentY = frames[0].Height;
-
-                    for (int i = 1; i < frames.Count; i++) {
-                        int sliceTop = sliceOffsets[i];
-                        int sliceH = frames[i].Height - sliceTop;
-                        Rectangle srcRect = new Rectangle(0, sliceTop, w, sliceH);
-                        Rectangle destRect = new Rectangle(0, currentY, w, sliceH);
-                        g.DrawImage(frames[i], destRect, srcRect, GraphicsUnit.Pixel);
-                        currentY += sliceH;
-                    }
-                }
-
-                stitched.Save(outPath, ImageFormat.Png);
-                Console.WriteLine("SUCCESS:" + outPath + ":" + w + "x" + totalHeight);
-
-                // Clean up bitmaps
+                int stitchResult = StitchFrames(frames, outPath);
                 foreach (Bitmap b in frames) b.Dispose();
-                stitched.Dispose();
-                return 0;
+                return stitchResult;
             }
 
             int sx = 0, sy = 0, sw = 0, sh = 0;

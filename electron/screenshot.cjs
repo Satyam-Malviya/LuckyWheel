@@ -37,10 +37,11 @@ function getScreenCapBinary() {
 
 /**
  * Capture screen, active window, or custom region
- * @param {'screen' | 'window' | 'region'} mode
+ * @param {'screen' | 'window' | 'region' | 'scroll'} mode
  * @param {{ x?: number, y?: number, width?: number, height?: number }} [region]
+ * @param {{ maxScrolls?: number }} [options]
  */
-function captureScreen(mode = 'screen', region = null) {
+function captureScreen(mode = 'screen', region = null, options = {}) {
   return new Promise((resolve, reject) => {
     const bin = getScreenCapBinary();
     if (!bin) {
@@ -58,6 +59,9 @@ function captureScreen(mode = 'screen', region = null) {
         String(Math.round(region.width || 100)),
         String(Math.round(region.height || 100))
       );
+    } else if (mode === 'scroll' || mode === 'long') {
+      const maxScrolls = options && options.maxScrolls ? options.maxScrolls : 25;
+      args.push(String(maxScrolls));
     }
 
     const child = spawn(bin, args, { windowsHide: true });
@@ -75,7 +79,7 @@ function captureScreen(mode = 'screen', region = null) {
             const img = nativeImage.createFromPath(outPath);
             const sz = img.getSize();
             // Create a small preview dataUrl for instant UI rendering
-            const previewDataUrl = img.resize({ width: 320 }).toDataURL();
+            const previewDataUrl = img.resize({ width: 360 }).toDataURL();
             return resolve({
               success: true,
               filePath: outPath,
@@ -89,6 +93,63 @@ function captureScreen(mode = 'screen', region = null) {
         }
       }
       reject(new Error(`Screenshot capture failed (exit code ${code}): ${stderr || stdout}`));
+    });
+
+    child.on('error', reject);
+  });
+}
+
+/**
+ * Stitch multiple frames together into a continuous vertical image
+ * @param {string[]} framePaths
+ */
+function stitchFrames(framePaths = []) {
+  return new Promise((resolve, reject) => {
+    const validFrames = framePaths.filter((p) => p && fs.existsSync(p));
+    if (validFrames.length === 0) {
+      return reject(new Error('No valid frames provided for stitching'));
+    }
+    if (validFrames.length === 1) {
+      const img = nativeImage.createFromPath(validFrames[0]);
+      const sz = img.getSize();
+      return resolve({
+        success: true,
+        filePath: validFrames[0],
+        width: sz.width,
+        height: sz.height,
+        previewDataUrl: img.resize({ width: 360 }).toDataURL(),
+      });
+    }
+
+    const bin = getScreenCapBinary();
+    if (!bin) {
+      return reject(new Error('screencap.exe not found'));
+    }
+
+    const tempDir = app?.getPath?.('temp') || os.tmpdir();
+    const outPath = path.join(tempDir, `LuckyWheel_stitched_${Date.now()}.png`);
+    const args = ['stitch', outPath, ...validFrames];
+
+    const child = spawn(bin, args, { windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (d) => (stdout += d.toString()));
+    child.stderr.on('data', (d) => (stderr += d.toString()));
+
+    child.on('close', (code) => {
+      if (code === 0 && fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+        const img = nativeImage.createFromPath(outPath);
+        const sz = img.getSize();
+        return resolve({
+          success: true,
+          filePath: outPath,
+          width: sz.width,
+          height: sz.height,
+          previewDataUrl: img.resize({ width: 360 }).toDataURL(),
+        });
+      }
+      reject(new Error(`Stitching failed (code ${code}): ${stderr || stdout}`));
     });
 
     child.on('error', reject);
@@ -223,19 +284,26 @@ function cropImage(sourcePath, { x, y, width, height }) {
   const tempDir = app?.getPath?.('temp') || os.tmpdir();
   const outPath = path.join(tempDir, `LuckyWheel_crop_${Date.now()}.png`);
   const img = nativeImage.createFromPath(sourcePath);
+  const sz = img.getSize();
+
+  const cropX = Math.max(0, Math.min(Math.max(0, sz.width - 5), Math.round(x)));
+  const cropY = Math.max(0, Math.min(Math.max(0, sz.height - 5), Math.round(y)));
+  const cropW = Math.max(5, Math.min(sz.width - cropX, Math.round(width)));
+  const cropH = Math.max(5, Math.min(sz.height - cropY, Math.round(height)));
+
   const cropped = img.crop({
-    x: Math.max(0, Math.round(x)),
-    y: Math.max(0, Math.round(y)),
-    width: Math.max(10, Math.round(width)),
-    height: Math.max(10, Math.round(height)),
+    x: cropX,
+    y: cropY,
+    width: cropW,
+    height: cropH,
   });
   fs.writeFileSync(outPath, cropped.toPNG());
-  const sz = cropped.getSize();
+  const croppedSz = cropped.getSize();
   return {
     success: true,
     filePath: outPath,
-    width: sz.width,
-    height: sz.height,
+    width: croppedSz.width,
+    height: croppedSz.height,
     previewDataUrl: cropped.resize({ width: 360 }).toDataURL(),
   };
 }
@@ -243,6 +311,7 @@ function cropImage(sourcePath, { x, y, width, height }) {
 module.exports = {
   captureScreen,
   cropImage,
+  stitchFrames,
   saveScreenshot,
   getSystemDirectories,
 };

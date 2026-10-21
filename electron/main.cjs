@@ -32,7 +32,7 @@ const http = require('http');
 const { exec, spawn } = require('child_process');
 const { processFiles, checkFfmpeg, generateWifiQrForFile } = require('./converter.cjs');
 const { detectUrl, downloadWithYtDlp, downloadDirectFile } = require('./downloader.cjs');
-const { captureScreen, cropImage, saveScreenshot, getSystemDirectories } = require('./screenshot.cjs');
+const { captureScreen, cropImage, stitchFrames, saveScreenshot, getSystemDirectories } = require('./screenshot.cjs');
 
 // Ensure clean writable cache directory on Windows
 try {
@@ -48,11 +48,22 @@ let isQuitting = false;
 
 let snipWindow = null;
 
-function showSnipStudioWindow() {
+async function showSnipStudioWindow() {
   if (snipWindow && !snipWindow.isDestroyed()) {
     snipWindow.show();
     snipWindow.focus();
     return;
+  }
+
+  // Freeze current desktop before opening snip studio
+  let bgFilePath = '';
+  try {
+    const snap = await captureScreen('screen');
+    if (snap && snap.success && snap.filePath) {
+      bgFilePath = snap.filePath;
+    }
+  } catch (e) {
+    logDebug('Error capturing screen for snip bg: ' + (e?.message || e));
   }
 
   const primaryDisp = screen.getPrimaryDisplay();
@@ -74,15 +85,16 @@ function showSnipStudioWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
     },
   });
 
   const resolvedDir = lastActiveExplorerDir || app.getPath('desktop');
   const prodIndex = path.join(__dirname, '../dist/index.html');
-  const queryStr = `snip=1&dir=${encodeURIComponent(resolvedDir)}`;
+  const queryStr = `snip=1&dir=${encodeURIComponent(resolvedDir)}&bg=${encodeURIComponent(bgFilePath)}`;
 
   if (fs.existsSync(prodIndex)) {
-    snipWindow.loadFile(prodIndex, { query: { snip: '1', dir: resolvedDir } });
+    snipWindow.loadFile(prodIndex, { query: { snip: '1', dir: resolvedDir, bg: bgFilePath } });
   } else {
     snipWindow.loadURL(`http://localhost:5173/?${queryStr}`);
   }
@@ -978,7 +990,7 @@ async function captureScrollableWebpage({ url, outputDir = null, title = '' }) {
 // Native Screen Capture & Snip Studio IPC
 // ==========================================
 ipcMain.handle('screenshot:capture', async (_e, payload) => {
-  const { mode = 'screen', region = null, delayMs = 0 } = payload || {};
+  const { mode = 'screen', region = null, delayMs = 0, maxScrolls = 25 } = payload || {};
   try {
     const isSnipVisible = snipWindow && !snipWindow.isDestroyed() && snipWindow.isVisible();
     const isOverlayVisible = overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
@@ -988,7 +1000,7 @@ ipcMain.handle('screenshot:capture', async (_e, payload) => {
 
     await new Promise((r) => setTimeout(r, Math.max(90, delayMs)));
 
-    const res = await captureScreen(mode, region);
+    const res = await captureScreen(mode, region, { maxScrolls });
 
     if (isSnipVisible && snipWindow && !snipWindow.isDestroyed()) {
       snipWindow.show();
@@ -1000,6 +1012,16 @@ ipcMain.handle('screenshot:capture', async (_e, payload) => {
     logDebug('screenshot:capture error: ' + err.message);
     if (snipWindow && !snipWindow.isDestroyed()) snipWindow.show();
     return { success: false, message: err.message || 'Capture failed' };
+  }
+});
+
+ipcMain.handle('screenshot:stitch', async (_e, payload) => {
+  const { framePaths = [] } = payload || {};
+  try {
+    return await stitchFrames(framePaths);
+  } catch (err) {
+    logDebug('screenshot:stitch error: ' + err.message);
+    return { success: false, message: err.message || 'Stitching failed' };
   }
 });
 
